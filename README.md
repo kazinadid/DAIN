@@ -2,6 +2,12 @@
 
 Clean Supabase rebuild for the Dhaka University community. No legacy user data is imported.
 
+Live website: https://dain-platform.netlify.app
+
+Deployment is currently manual through the authorized Netlify CLI, targeting site `874432cc-5ba3-4f72-8a1e-1e388f3cfeb8`. GitHub continuous deployment is not connected yet: pushing to this repository does not automatically publish the site. `.netlify/` is ignored and no deployment credentials are committed.
+
+The owner reports production auth URLs and SMTP have been configured. Real-email acceptance testing is still pending; the approved administrator will create and confirm the account later.
+
 ## Stack
 
 - Vite and modular JavaScript; responsive navy/gold DUNITE visual system.
@@ -68,7 +74,7 @@ Evidence never appears in the public story projection. It is served only through
 
 ## Remaining release work
 
-- Configure/verify production SMTP and auth redirect settings.
+- Verify production SMTP and auth redirects through a real signup (configuration reported complete by the owner).
 - Provision and assign the approved administrator and editor accounts.
 - Complete a real-email browser acceptance test including evidence upload/download.
 - Optional automated Groq/Tavily claim verification is not connected in this build. No story is labeled AI-verified. Editorial review is the current verification step.
