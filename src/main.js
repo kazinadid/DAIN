@@ -53,7 +53,7 @@ function auth() {
   const f = new FormData(ev.target), email=String(f.get('email')).trim(), password=String(f.get('password')||'');
   if (reset) { check(await db.auth.resetPasswordForEmail(email,{redirectTo:`${location.origin}/#/password`}));notice='Check your email for a password reset link.';renderAlert();return; }
   if (registering) {
-   if(!institutionalEmail(email)) throw Error('Please use your DU institutional email, such as name@du.ac.bd.');
+   // Non-DU accounts may sign in as invited staff; SQL still gates submissions to verified DU members.
    const data=check(await db.auth.signUp({email,password,options:{data:{display_name:String(f.get('name'))},emailRedirectTo:`${location.origin}/#/dashboard`}}));
    if(data.session) {location.hash='#/dashboard';} else {notice='Check your email to confirm your account, then sign in. If no email arrives, contact the DAIN administrator.';renderAlert();}
   } else {check(await db.auth.signInWithPassword({email,password}));location.hash='#/dashboard';}

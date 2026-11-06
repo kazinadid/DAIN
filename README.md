@@ -35,7 +35,7 @@ The default URL and publishable key target project `hfxlcvigujvyuayhzhax`. These
 
 ## Database
 
-`supabase/schema.sql` is the exact baseline applied to the empty hosted project using migration `dain_initial_schema`. Do not run it again on that project. Future changes must be additive migrations. The schema file is a reproducible bootstrap for another empty project.
+`supabase/schema.sql` is the baseline applied to the empty hosted project using migration `dain_initial_schema`. The subsequent `bootstrap_approved_administrator` and `isolate_privileged_rpc_implementations` migrations are recorded in `bootstrap_admin.sql` and `harden_rpc.sql`. Do not reapply these on this project. To bootstrap another empty project, review the administrator email and apply those three files in that order. Future changes must be additive migrations.
 
 Run `supabase/verify.sql` through a trusted SQL connection for integration checks. It tests owner isolation, non-DU rejection, direct publication denial, editorial approval/publication transitions, audit history and anonymous access. Fixtures are enclosed in a transaction and rolled back.
 
@@ -58,11 +58,11 @@ where lower(email) = lower('REPLACE_WITH_APPROVED_ADMIN_EMAIL')
 on conflict (user_id) do update set role = excluded.role;
 ```
 
-Staff records are protected from public clients. User-editable metadata never grants roles. No first-user-is-admin shortcut exists. Editors with non-DU emails can sign in when their account is provisioned by an administrator; self-registration in the website is restricted to DU addresses.
+Staff records are protected from public clients. User-editable metadata never grants roles. No first-user-is-admin shortcut exists. Registration accepts email addresses for staff onboarding, while database policies restrict member submissions to verified DU addresses. The approved bootstrap administrator receives the role only after confirming the configured email. Knowing the address alone does not grant access.
 
 ## Security notes
 
-`private.staff` intentionally has RLS with no client policies. `my_role`, `submit_story` and `review_story` are deliberately privileged API functions, with empty search paths and explicit identity/role/ownership/transition checks. Supabase's advisor may flag their authenticated execution; this access is required for the workflow and covered by integration tests. Anonymous execution is revoked.
+`private.staff` and `private.admin_bootstrap` intentionally have RLS with no client policies. Privileged implementations live in the non-exposed `private` schema with empty search paths and explicit identity/role/ownership/transition checks. Public `my_role`, `submit_story` and `review_story` are security-invoker wrappers. Anonymous execution is revoked. The security advisor reports only informational notices about the two deliberately inaccessible private tables, with no warnings or errors.
 
 Evidence never appears in the public story projection. It is served only through authorized short-lived signed URLs. Files use generated names. This release enforces size/MIME restrictions; malware scanning is not yet integrated.
 
