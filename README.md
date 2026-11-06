@@ -1,84 +1,77 @@
-# DAIN — DUNITE Achievement & Impact Network
+# DAIN — Original frontend + Supabase
 
-Clean Supabase rebuild for the Dhaka University community. No legacy user data is imported.
+Website: https://dain-platform.netlify.app
 
-Live website: https://dain-platform.netlify.app
+## Original frontend retained
 
-Deployment is currently manual through the authorized Netlify CLI, targeting site `874432cc-5ba3-4f72-8a1e-1e388f3cfeb8`. GitHub continuous deployment is not connected yet: pushing to this repository does not automatically publish the site. `.netlify/` is ignored and no deployment credentials are committed.
+The source index.html and frontend/original.html are byte-identical copies of Neha-hub-maker/DAIN-New's original frontend, Git blob 3b1c085a9282e7719572da25f777a4ff417fbecc. All original HTML, CSS, fonts, branding, dialogs and navigation markup are retained. The original logo and three Product Sans fonts are copied unchanged.
 
-The owner reports production auth URLs and SMTP have been configured. Real-email acceptance testing is still pending; the approved administrator will create and confirm the account later.
+scripts/build.mjs replaces only the final application script's data/authentication hooks and writes dist/index.html. It bundles the Supabase adapter as dist/api-config.js, using the original script tag. A build check and test compare every byte outside that application script to the original. The original Tailwind CDN and inline event-handler architecture are preserved; the CSP explicitly permits those dependencies.
 
-## Stack
+Behavior changes: database-backed authentication and stories, server-enforced editorial permissions, no demo privilege escalation, no fake reach/analytics, no local-only publishing, no false dispatch confirmation. The existing Media Network panel displays actual queue state and the disabled sending status. Selecting an editorial affiliation at registration never grants staff access.
 
-- Vite and modular JavaScript; responsive navy/gold DUNITE visual system.
-- Supabase Auth for email confirmation, login, logout and password recovery.
-- PostgreSQL with RLS, protected editorial roles, checked transactional RPCs and immutable review history.
-- Private Supabase Storage evidence bucket, 5 MB PDF/JPEG/PNG/WebP limit.
-- Netlify static hosting; build command `npm ci && npm run build`, publish directory `dist`.
+## Build and deploy
 
-## Implemented workflow
+Requires Node 22.12+ or compatible newer Node.
 
-1. A user registers with a DU institutional email, confirms it and signs in.
-2. They create/edit a draft, attach private evidence and submit it for review.
-3. An assigned editor approves, rejects or requests changes with a note. Editors cannot review their own stories.
-4. Approval and publication are separate actions. Only published projections are publicly readable.
-5. A public story page supports copying its link, printing, and downloading a text press kit.
+- npm ci
+- npm test (builds first, then runs the tests)
+- npm run dev (serves the built frontend; APIs require Netlify dev or a deployed preview)
 
-The member workspace contains only the signed-in member's stories. The editorial desk shows permitted submissions. File access is enforced at the storage layer, not by hiding UI controls.
+Netlify build: npm ci && npm run build. Publish: dist. Functions: netlify/functions.
+Site ID: 874432cc-5ba3-4f72-8a1e-1e388f3cfeb8.
+Deployment currently uses an authorized local Netlify CLI. GitHub continuous deployment is not connected: pushing does not automatically publish. .netlify/ is ignored. No privileged credentials are committed.
 
-## Local development
+## AI verification
 
-Requires Node 22.12+ (or a Vite-compatible newer Node).
+Set these in Netlify environment variables, Functions scope, then redeploy:
 
-```sh
-npm ci
-npm run dev
-npm test
-npm run build
-```
+- GROQ_API_KEY
+- TAVILY_API_KEY
+- SUPABASE_SECRET_KEY — secret/service-role key for project hfxlcvigujvyuayhzhax; never put it in frontend configuration.
+- Optional GROQ_MODEL, default openai/gpt-oss-120b.
 
-The default URL and publishable key target project `hfxlcvigujvyuayhzhax`. These are public client configuration, not privileged credentials. Override through `.env` using `.env.example` when targeting another project. Never put a service-role key in frontend code.
+POST /api/verify accepts a submission_id with a Supabase Bearer token. The server verifies the actual user, confirmed DU email, ownership and submitted state. It loads the saved story, enforces a persistent per-user quota and an in-flight lock, extracts up to four claims through Groq, searches Tavily, optionally extracts supplied evidence, and assesses claims using retrieved excerpts.
 
-## Database
+Only exact retrieved URLs can become citations. Unsupported or submitted-domain-only evidence cannot verify claims. Provider failures return verification_pending, never approval. Results are stored by the server; clients cannot write AI verdicts. Human editorial approval and publication remain separate. AI never sends emails or grants public visibility. Author email and account details are excluded from AI prompts. AI assessment is not a guarantee of factual correctness.
 
-`supabase/schema.sql` is the baseline applied to the empty hosted project using migration `dain_initial_schema`. The subsequent `bootstrap_approved_administrator` and `isolate_privileged_rpc_implementations` migrations are recorded in `bootstrap_admin.sql` and `harden_rpc.sql`. Do not reapply these on this project. To bootstrap another empty project, review the administrator email and apply those three files in that order. Future changes must be additive migrations.
+GET /api/health reports configuration presence, with no secrets. Configuration presence does not prove provider credits or model availability. Live authenticated provider acceptance testing is pending until keys and a confirmed DU account are available. The owner requested deployment before adding keys.
 
-Run `supabase/verify.sql` through a trusted SQL connection for integration checks. It tests owner isolation, non-DU rejection, direct publication denial, editorial approval/publication transitions, audit history and anonymous access. Fixtures are enclosed in a transaction and rolled back.
+## Newsroom distribution
 
-## Required account configuration before inviting members
+Real sending is disabled by a source constant in netlify/functions/distribute.mjs, as explicitly requested. No recipient addresses are invented or scraped. No bulk, background or scheduled sender is enabled.
 
-In Supabase Authentication → URL Configuration:
+Publication queues jobs only for active, explicitly approved newsrooms and only when the author accepted syndication consent. Queue uniqueness prevents duplicate story/recipient jobs. An exclusive service-side claim prevents concurrent sends. The implemented Resend adapter isolates recipients, uses a stable idempotency key, records actual provider IDs, and caps retries at three.
 
-- Site URL: `https://dain-platform.netlify.app`
-- Redirect allow list: `https://dain-platform.netlify.app/**` and `http://127.0.0.1:5173/**` for local development.
-- Keep email confirmation enabled.
-- Configure a real SMTP provider for delivery to DU members. Supabase's built-in development mail service may restrict recipients and has low limits.
+The accepted status means the email provider accepted a request. It does not mean inbox delivery, media placement or audience reach. Failed requests are not recorded as successful.
 
-To bootstrap a specific approved administrator, create/confirm that user's Auth account, then a trusted project administrator can execute:
+Before enabling delivery in a later approved change:
 
-```sql
-insert into private.staff(user_id, role)
-select id, 'admin' from auth.users
-where lower(email) = lower('REPLACE_WITH_APPROVED_ADMIN_EMAIL')
-  and email_confirmed_at is not null
-on conflict (user_id) do update set role = excluded.role;
-```
+1. Import the owner's approved newsroom list into public.newsrooms through a trusted administrator connection. Set active and approved_at only for approved recipients.
+2. Configure a verified sender, RESEND_API_KEY and NEWSROOM_FROM_EMAIL as Functions secrets. Another provider requires a corresponding adapter.
+3. Complete a single-recipient test with the owner, verify its receipt, then enable sending in source and redeploy.
+4. Add signed provider webhooks if delivered/bounced statuses are required. Those are not implemented here.
 
-Staff records are protected from public clients. User-editable metadata never grants roles. No first-user-is-admin shortcut exists. Registration accepts email addresses for staff onboarding, while database policies restrict member submissions to verified DU addresses. The approved bootstrap administrator receives the role only after confirming the configured email. Knowing the address alone does not grant access.
+The original public 100+ newsroom marketing copy is retained as requested. It is not evidence that 100+ recipients are configured. No newsroom contacts or measured audience reach are currently imported.
 
-## Security notes
+## Supabase and administration
 
-`private.staff` and `private.admin_bootstrap` intentionally have RLS with no client policies. Privileged implementations live in the non-exposed `private` schema with empty search paths and explicit identity/role/ownership/transition checks. Public `my_role`, `submit_story` and `review_story` are security-invoker wrappers. Anonymous execution is revoked. The security advisor reports only informational notices about the two deliberately inaccessible private tables, with no warnings or errors.
+Project: hfxlcvigujvyuayhzhax.
+Applied schema source, in order: supabase/schema.sql, bootstrap_admin.sql, harden_rpc.sql, verification_distribution.sql. These are already applied; do not rerun on this project. To bootstrap another empty project, review the administrator email first.
 
-Evidence never appears in the public story projection. It is served only through authorized short-lived signed URLs. Files use generated names. This release enforces size/MIME restrictions; malware scanning is not yet integrated.
+The approved administrator email is reserved privately and receives its role only after email confirmation. The owner will create that account later. Members require confirmed DU institutional emails to submit. RLS and checked private RPC implementations enforce ownership and roles independently of the UI. Published projections exclude private evidence, account IDs and review notes.
 
-## Remaining release work
+The initial private evidence bucket remains available at the storage layer. The exact original frontend exposes an evidence-link field, not a new file-upload interface.
 
-- Verify production SMTP and auth redirects through a real signup (configuration reported complete by the owner).
-- Provision and assign the approved administrator and editor accounts.
-- Complete a real-email browser acceptance test including evidence upload/download.
-- Optional automated Groq/Tavily claim verification is not connected in this build. No story is labeled AI-verified. Editorial review is the current verification step.
-- Newsroom distribution, real DUNITE SSO, malware scanning, and notification emails are not implemented.
-- Hash-based public routes are suitable for this first preview; server-rendered story URLs/social metadata should be added before a media-facing launch.
+The owner reports SMTP and production URL settings are configured. Site URL: https://dain-platform.netlify.app. Redirect allow list: https://dain-platform.netlify.app/**. Confirmation emails should use the normal confirmation link. If the email template includes the Supabase signup OTP, the retained code-entry dialog accepts it.
 
-The old repository remains a functional reference at https://github.com/Neha-hub-maker/DAIN-New. This code is a fresh implementation.
+Database integration tests: supabase/verify.sql and supabase/verify_distribution.sql. They check ownership, eligibility, editorial transitions, audit history, AI tamper protection, quota, recipient approval, queue uniqueness and exclusive send claims. Fixtures are rolled back.
+
+Two private tables intentionally have RLS with no client policies. Supabase also currently recommends enabling leaked-password protection:
+https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+## Boundaries
+
+Real DUNITE SSO, newsroom placement tracking, audience-reach measurement and malware scanning are not implemented. No automatic account bypass or self-assigned editor role exists.
+
+Original source reference: https://github.com/Neha-hub-maker/DAIN-New
