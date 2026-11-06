@@ -145,7 +145,13 @@ async function sessionChanged(session) {
 window.addEventListener('hashchange',()=>{notice='';route();window.scrollTo(0,0);});
 db.auth.onAuthStateChange((event,session)=>{
  if(event==='PASSWORD_RECOVERY')location.hash='#/password';
+ // Supabase may emit SIGNED_IN on tab focus and TOKEN_REFRESHED in the background.
+ // Preserve an in-progress draft when the same account's session is refreshed.
+ if(event!=='INITIAL_SESSION' && event!=='PASSWORD_RECOVERY' && (session?.user?.id || null)===(user?.id || null)) {
+  user=session?.user||null; return;
+ }
  // Avoid awaiting Supabase calls inside its auth lock callback.
  setTimeout(()=>sessionChanged(session),0);
 });
 shell('<section class="wrap section"><p class="muted" role="status">Opening DAIN…</p></section>');
+
