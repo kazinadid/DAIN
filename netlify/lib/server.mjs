@@ -1,7 +1,8 @@
 import {createClient} from '@supabase/supabase-js';
+import {projectConfig} from '../../shared/config.mjs';
 export const env=name=>globalThis.Netlify?.env?.get(name)||process.env[name]||'';
-const url='https://hfxlcvigujvyuayhzhax.supabase.co';
-const key='sb_publishable_FGN-XtMGVUZairpVWBx36w_LrHZRh6O';
+const url=env('VITE_SUPABASE_URL')||projectConfig.url;
+const key=env('VITE_SUPABASE_PUBLISHABLE_KEY')||projectConfig.key;
 export const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export function checked(r){if(r.error)throw Error('Database operation failed.');return r.data;}
 export async function timed(stage,operation){const started=performance.now();try{return await operation();}finally{console.info(JSON.stringify({stage,duration_ms:Math.round(performance.now()-started)}));}}

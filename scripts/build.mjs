@@ -7,6 +7,7 @@ import tailwind from 'tailwindcss';
 import forms from '@tailwindcss/forms';
 import containers from '@tailwindcss/container-queries';
 import sharp from 'sharp';
+import {productionHTML} from './production-html.mjs';
 const original=await fs.readFile('frontend/original.html','utf8');
 const start=original.lastIndexOf('<script>'),end=original.indexOf('</script>',start);
 let js=original.slice(start+8,end);
@@ -37,7 +38,7 @@ section('window.loginAsDemo =','window.switchView =',`window.loginAsDemo = funct
 section('window.approveAdminStory =','// Modal Dialog',`window.approveAdminStory = async function(id) {
         try{const queued=await DAIN.publish(id);stories=await DAIN.list();renderAdminSubmissions();showToast('Published. '+queued+' approved newsroom deliveries queued; sending is disabled.','verified');}catch(error){showToast(error.message,'error');}
       };\n      `);
-section('async function requestStoryVerification(payload) {','function createStoryId()',`async function requestStoryVerification(payload) { return window.DAIN.submit(payload); }\n      `);
+section('async function requestStoryVerification(payload) {','function createStoryId()',`async function requestStoryVerification(payload) { return window.DAINUI.submitPayload(payload); }\n      `);
 replace('const status = verification.status === "verified" ? "Approved" : (verification.status === "rejected" ? "Rejected" : "Pending Review");','const status = "Pending Review";');
 replace('id: createStoryId(), headline: payload.headline, summary: payload.summary,','id: verification.submission_id, headline: payload.headline, summary: payload.summary,');
 replace('localStorage.setItem("dain_stories", JSON.stringify([newStory, ...stories]));','// Submission and AI results were persisted by the backend.');
@@ -53,13 +54,13 @@ replace('// Restore saved user session & draft on load',`async function renderDi
         panel.innerHTML='<p class="font-bold text-sm">Distribution is disabled</p><p class="text-xs text-on-surface-variant">No newsroom emails are being sent. Approved recipients and sender configuration are required.</p>'+(data.staff?'<p class="text-xs font-mono">'+data.newsrooms.length+' configured newsrooms · '+data.jobs.length+' delivery jobs</p>'+data.jobs.map(j=>'<p class="text-xs font-mono">'+escapeHTML(j.story_id)+' · '+escapeHTML(j.status)+' · attempts '+j.attempts+'</p>').join(''):'');
         }catch(error){showToast(error.message,'error');}
       }
-      DAIN.ready.then(async()=>{const user=await DAIN.account();if(user)applyUserSession(user);stories=await DAIN.list();renderHomeFeatured();}).catch(error=>showToast(error.message,"error"));
+      DAIN.ready.then(async()=>{const user=await DAIN.account();if(user)applyUserSession(user);stories=(await DAIN.publicPage(0)).rows;renderHomeFeatured();if(document.getElementById('view-stories').classList.contains('active'))renderStoriesDirectory('All');}).catch(error=>showToast(error.message,"error"));
       document.getElementById('verify-email-token').minLength=6;
       document.querySelectorAll('#view-analytics .text-2xl').forEach(el=>el.textContent='Not tracked');
       if(DAIN.entryHash.startsWith('#/auth'))openAuthModal(DAIN.entryHash.includes('register')?'register':'login');
       // Restore saved user session & draft on load`);
 replace('window.switchView = function(viewName, skipHistory = false) {',`window.switchView = function(viewName, skipHistory = false) {
- if(viewName==='submit' && currentUser.isLoggedIn && !isDUInstitutionalEmail(currentUser.email)){showToast('To submit a story, sign in with your confirmed DU institutional email. Gmail administrators can review stories but cannot submit as a DU author.','error');return;}
+ if(viewName==='submit' && currentUser.isLoggedIn && currentUser.role!=='Admin' && !isDUInstitutionalEmail(currentUser.email)){showToast('To submit a story, sign in with your confirmed DU institutional email. Administrator accounts may submit with their confirmed login email.','error');return;}
  if(viewName==='admin' && currentUser.role!=='Admin'){showToast('Only administrators can open Editorial Review.','error');return;}`);
 replace("s.status === 'Pending Review' ?", "s.status === 'Pending Review' && currentUser.role === 'Admin' ?");
 replace('// Restore saved user session & draft on load',`
@@ -79,16 +80,32 @@ replace('// Restore saved user session & draft on load',`
       const own=document.createElement('button');own.className='nav-item w-full px-3 py-2 text-left text-xs';own.textContent='My submissions';document.querySelector('[data-view="stories"]').after(own);
       own.onclick=async()=>{try{const mine=await DAIN.mine();enterAppWorkspace('stories');setTimeout(()=>{document.getElementById('stories-directory-grid').innerHTML=mine.map(s=>'<div class="p-4 border rounded-xl"><h3>'+escapeHTML(s.headline)+'</h3><p>'+escapeHTML(s.rawStatus)+'</p><p>'+escapeHTML(s.summary)+'</p></div>').join('')||'<p>No submissions yet.</p>';},300);}catch(error){showToast(error.message,'error');}};
       // Restore saved user session & draft on load`);
+section('const seedStories = [','let stories =','');
+// Validate every wizard stage before advancing; administrators may use their confirmed account email.
+replace('if (!isDUInstitutionalEmail(em)) {',"if (currentUser.role !== 'Admin' && !isDUInstitutionalEmail(em)) {");
+replace('wizardStep = 2;',`const narrative=document.getElementById('narrative');if(!narrative.checkValidity()){narrative.reportValidity();showToast('Write the full story (80–20,000 characters) before continuing.','error');return;}wizardStep = 2;`);
+replace('if (!inst) {',`if(date>new Date().toLocaleDateString('en-CA')){highlightErrorField('achievement-date');showToast('The achievement date cannot be in the future.','error');return;}
+            const evidence=document.getElementById('evidence-link');if(evidence.value.trim()){try{const u=new URL(evidence.value.trim());if(!['https:','http:'].includes(u.protocol)||u.username||u.password)throw Error();evidence.value=u.href;}catch{highlightErrorField('evidence-link');showToast('Enter a complete http or https evidence link without login details.','error');return;}}
+            if (!inst) {`);
+replace('await animatePipeline(verification.stages);','// Saving is confirmed immediately; provider work continues in the background.');
+replace('Please check the certification box to authorize syndication.','Please certify that this story is authentic.');
+replace("stories=await DAIN.list();completeAuthSuccess(user,user.role==='Admin'?'admin':'home');", "completeAuthSuccess(user,user.role==='Admin'?'admin':'home');DAIN.list().then(rows=>{stories=rows;renderHomeFeatured();}).catch(error=>showToast('Signed in, but stories could not load: '+error.message,'error'));");
+section('function renderStoriesDirectory(filterSector = "All") {','function renderSectorGrid(',`function renderStoriesDirectory(filterSector='All'){window.DAINUI?.publicList('stories-directory-grid',filterSector);}`);
+section('function renderAdminSubmissions() {','window.approveAdminStory =',`function renderAdminSubmissions(){window.DAINUI?.adminList();}\n      `);
+replace('localStorage.setItem("dain_user", JSON.stringify(user));','// Session identity is managed by Supabase Auth; no duplicate PII copy.');
+replace('// Restore saved user session & draft on load',`window.DAINUI=window.installDAINUI({escapeHTML,getUser:()=>currentUser,renderCard:renderStoryCardHTML});\n      // Restore saved user session & draft on load`);
+js=js.replaceAll('s.status === "Approved"','s.rawStatus === "published"').replaceAll('story.status === "Approved"','story.rawStatus === "published"').replaceAll('story.status !== "Approved"','story.rawStatus !== "published"');
 const output=original.slice(0,start+8)+js+original.slice(end);
 // Protect the exact retained design: all HTML/CSS outside the application script is identical.
 if(output.slice(0,start)!==original.slice(0,start)||output.slice(output.lastIndexOf('</script>'))!==original.slice(original.lastIndexOf('</script>')))throw Error('Original frontend markup changed');
 await build({configFile:false,build:{outDir:'dist',emptyOutDir:true,lib:{entry:'src/bridge.js',name:'DAINIntegration',formats:['iife'],fileName:()=> 'api-config.js'}}});
-await fs.cp('assets','dist/assets',{recursive:true});
+await fs.mkdir('dist/assets',{recursive:true});
+await fs.cp('assets/fonts','dist/assets/fonts',{recursive:true});
 const context={tailwind:{}};vm.runInNewContext(original.match(/<script>\s*(tailwind.config[\s\S]*?)<\/script>/)[1],context);
-const css=await postcss([tailwind({...context.tailwind.config,content:[{raw:output,extension:'html'}],plugins:[forms,containers]})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined});
+const css=await postcss([tailwind({...context.tailwind.config,content:[{raw:output,extension:'html'},'src/**/*.js'],plugins:[forms,containers]})]).process('@tailwind base;@tailwind components;@tailwind utilities;\n'+await fs.readFile('src/ui.css','utf8'),{from:undefined});
 const cssName='ui-'+createHash('sha256').update(css.css).digest('hex').slice(0,12)+'.css';
 await fs.writeFile('dist/assets/'+cssName,css.css);
 await sharp('assets/dunite-logo.png').resize({width:320,withoutEnlargement:true}).webp({quality:85}).toFile('dist/assets/dunite-logo.webp');
 const optimized=output.replace('<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>', '<link rel="stylesheet" href="assets/'+cssName+'">').replace(/<script>\s*tailwind.config[\s\S]*?<\/script>/,'').replaceAll('assets/dunite-logo.png','assets/dunite-logo.webp');
-await fs.writeFile('dist/index.html',optimized.replace('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/mortezaom/google-sans-cdn@master/fonts.css" />','<link rel="preload" href="assets/fonts/ProductSans-Regular.woff2" as="font" type="font/woff2" crossorigin>'));
+await fs.writeFile('dist/index.html',await productionHTML(optimized.replace('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/mortezaom/google-sans-cdn@master/fonts.css" />','<link rel="preload" href="assets/fonts/ProductSans-Regular.woff2" as="font" type="font/woff2" crossorigin>')));
 console.log('Original frontend source SHA-256:',createHash('sha256').update(original).digest('hex'));

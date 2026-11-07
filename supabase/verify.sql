@@ -7,6 +7,7 @@ insert into auth.users(id,email,email_confirmed_at) values
  ('10000000-0000-4000-8000-000000000004','dain-test-outsider@example.com',now());
 insert into private.staff values('10000000-0000-4000-8000-000000000002','admin');
 set local role authenticated;
+select set_config('request.jwt.claims','{"aal":"aal2"}',true);
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true);
 insert into public.submissions(headline,summary,narrative,sector,achievement_date,author_name)
  values('Integration test achievement','An evidence-based summary of a university achievement.',repeat('A detailed and verifiable story. ',8),'Academic & Research','2026-01-01','Test Author');
@@ -17,7 +18,7 @@ do $$ declare sid uuid; denied boolean := false; begin
  denied:=false;
  begin perform public.review_story(sid,'approved','Forged approval'); exception when others then denied:=true; end;
  if not denied then raise exception 'FAIL: member performed editorial review'; end if;
- perform public.submit_story(sid);
+ perform public.resubmit_story(sid,jsonb_build_object('headline','Integration test achievement','summary','An evidence-based summary of a university achievement.','narrative',repeat('A detailed and verifiable story. ',8),'sector','Academic & Research','achievement_date','2026-01-01','author_name','Test Author','institution','University of Dhaka','certified',true));
 end $$;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000003',true);
 do $$ begin if (select count(*) from public.submissions) <> 0 then raise exception 'FAIL: another member can see private submissions'; end if; end $$;

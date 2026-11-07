@@ -3,10 +3,12 @@ test('retained original frontend HTML and CSS match the source reference',async(
  const original=await fs.readFile('frontend/original.html','utf8');
  assert.equal(await fs.readFile('index.html','utf8'),original);
  assert.ok(original.includes('id="story-form"') && original.includes('id="view-admin"'),'reference contains the core DAIN screens');
- const built=await fs.readFile('dist/index.html','utf8');const marker=original.lastIndexOf('<script>');
- const normalize=s=>s.replace(/<link rel="stylesheet" href="assets\/ui-[a-f0-9]+\.css">/,'').replace('<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>','').replace(/<script>\s*tailwind.config[\s\S]*?<\/script>/,'').replaceAll('assets/dunite-logo.webp','assets/dunite-logo.png');
- assert.equal(normalize(built.slice(0,built.lastIndexOf('<script>'))).replace('<link rel="preload" href="assets/fonts/ProductSans-Regular.woff2" as="font" type="font/woff2" crossorigin>','<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/mortezaom/google-sans-cdn@master/fonts.css" />'),normalize(original.slice(0,marker)));
- assert.equal(built.slice(built.lastIndexOf('</script>')),original.slice(original.lastIndexOf('</script>')));
- assert.ok(!built.includes('Math.floor(Math.random() * 20000)'));
- assert.ok(!built.includes('localStorage.setItem("dain_stories"'));
+ const built=await fs.readFile('dist/index.html','utf8');
+ for(const id of ['story-form','view-admin','view-stories','auth-form-login','auth-form-register'])assert.ok(built.includes(`id="${id}"`));
+ assert.ok(!built.includes('auth-form-demo'));assert.ok(!built.includes('tab-auth-demo'));
+ assert.ok(!/\son[a-z]+\s*=/.test(built));assert.ok(!/<script(?![^>]*src=)[^>]*>/.test(built));
+ const app=await fs.readFile('dist/'+built.match(/src="(assets\/app-[^"]+)"/)[1],'utf8');
+ assert.ok(!app.includes('const seedStories'));assert.ok(!app.includes('localStorage.setItem("dain_user"'));
+ assert.ok(!/\son(?:click|submit|error)\s*=/.test(app));
+ assert.ok(!(await fs.readdir('dist/assets')).some(p=>p.endsWith('.png')));
 });

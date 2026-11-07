@@ -5,7 +5,7 @@ const SENDS_ENABLED=false;
 export default async req=>{
  if(req.method!=='POST')return json({detail:'POST required.'},405);
  try{
-  const {client}=await authenticate(req);const role=checked(await client.rpc('my_role'));if(!['admin','editor'].includes(role))return json({detail:'Editorial access required.'},403);
+  const {client}=await authenticate(req);if(!checked(await client.rpc('admin_session')))return json({detail:'Administrator access with MFA is required.'},403);
   if(!SENDS_ENABLED)return json({detail:'Newsroom sending is disabled. Queue preparation is available; no email was sent.',enabled:false},409);
   const {job_id}=await readBody(req);const admin=privileged();
   const job=checked(await admin.from('distribution_jobs').select('*').eq('id',job_id).single());

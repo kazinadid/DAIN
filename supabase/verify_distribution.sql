@@ -9,6 +9,7 @@ insert into public.stories(id,headline,summary,narrative,sector,author_name,inst
 select id,headline,summary,narrative,sector,author_name,institution,achievement_date from public.submissions where id='20000000-0000-4000-8000-000000000010';
 insert into public.newsrooms(name,email,active,approved_at) values('Approved test desk','approved@example.org',true,now()),('Unapproved desk','unapproved@example.org',true,null),('Inactive desk','inactive@example.org',false,now());
 set local role authenticated;
+select set_config('request.jwt.claims','{"aal":"aal2"}',true);
 select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000001',true);
 do $$ declare denied boolean:=false; begin
  begin update public.submissions set verification='{"status":"verified"}' where id='20000000-0000-4000-8000-000000000010';exception when insufficient_privilege then denied:=true;end;
@@ -27,7 +28,8 @@ end $$;
 reset role;
 set local role service_role;
 do $$ declare i integer;denied boolean:=false;jid uuid;begin
- for i in 1..5 loop
+ update public.submissions set status='submitted' where id='20000000-0000-4000-8000-000000000010';
+ for i in 1..3 loop
   perform public.reserve_verification('20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000010');
   update public.verification_runs set status='needs_review' where user_id='20000000-0000-4000-8000-000000000001';
  end loop;

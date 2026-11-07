@@ -1,14 +1,20 @@
 import {isIP} from 'node:net';
-export function publicURL(value){try{const u=new URL(value);if(!['http:','https:'].includes(u.protocol)||u.username||u.password||isIP(u.hostname.replace(/[\[\]]/g,''))||!u.hostname.includes('.')||/(^|\.)(localhost|local|internal|test|invalid)$/.test(u.hostname))return null;return u.href;}catch{return null;}}
+import {getDomain} from 'tldts';
+export function publicURL(value){try{const u=new URL(value);if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.hostname.endsWith('.')||isIP(u.hostname.replace(/[\[\]]/g,''))||!getDomain(u.hostname,{allowPrivateDomains:true})||/(^|\.)(localhost|local|internal|test|invalid)$/.test(u.hostname))return null;return u.href;}catch{return null;}}
+const domainOf=u=>getDomain(new URL(u).hostname,{allowPrivateDomains:true});
+function excerptSupports(claim,content){const terms=[...new Set(claim.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[])].filter(t=>!['the','and','with','from','that','this','has','was','have','for','its'].includes(t));if(terms.length<4)return false;const text=String(content||'').toLowerCase();return terms.filter(t=>text.includes(t)).length/terms.length>=.8;}
 export function result(status,reason,claims=[]){return {status,reason,claims,stages:[{id:'identity',status:'passed',detail:'Confirmed institutional account and submission ownership.'},{id:'editorial',status:status==='verified'?'passed':status==='rejected'?'failed':'held',detail:status==='verified'?'AI found supporting sources; editorial approval is still required.':reason},{id:'routing',status:'held',detail:'Human publication approval and approved newsroom recipients are required. No email has been sent.'}]};}
 export function normalizeAssessment(claim,data,sources,evidenceURL=''){
  const allowed=new Set(sources.map(s=>publicURL(s.url)).filter(Boolean));
  const citations=Array.isArray(data.sources)?[...new Set(data.sources.map(publicURL).filter(u=>u&&allowed.has(u)))]:[];
  let verdict=['verified','unverified','contradicted'].includes(data.verdict)?data.verdict:'unverified';
  const confidence=typeof data.confidence==='number'&&Number.isFinite(data.confidence)?Math.max(0,Math.min(1,data.confidence)):0;
- const domain=evidenceURL?new URL(evidenceURL).hostname:null;
- const independent=citations.some(u=>!domain||new URL(u).hostname!==domain);
- if(verdict==='verified'&&(!independent||confidence<.7))verdict='unverified';
+ const supplied=publicURL(evidenceURL);const domain=supplied?domainOf(supplied):null;
+ const independent=citations.filter(u=>!domain||domainOf(u)!==domain);
+ const independentDomains=new Set(independent.map(domainOf));
+ const uniqueExcerpts=new Set(independent.map(u=>String(sources.find(s=>publicURL(s.url)===u)?.content||'').toLowerCase().replace(/\s+/g,' ').trim()).filter(Boolean));
+ const directMatch=independent.some(u=>excerptSupports(claim,sources.find(s=>publicURL(s.url)===u)?.content));
+ if(verdict==='verified'&&(confidence<.7||!((independentDomains.size>=2&&uniqueExcerpts.size>=2)||directMatch)))verdict='unverified';
  if(verdict==='contradicted'&&(!citations.length||confidence<.7))verdict='unverified';
  return {text:claim,verdict,confidence,sources:citations};
 }
@@ -18,9 +24,9 @@ export async function verifyStory(story,{groqKey,tavilyKey,model='openai/gpt-oss
  if(new Set(text.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'')).size<5||text.split(/\s+/).length<6)return result('rejected','insufficient_content');
  if(!groqKey||!tavilyKey)return result('verification_pending','AI provider keys are not configured. Editorial review is required.');
  async function post(url,key,body){const started=performance.now();try{const r=await fetcher(url,{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify(body),signal});if(!r.ok)throw Error('provider_unavailable');return await r.json();}finally{console.info(JSON.stringify({stage:new URL(url).hostname+new URL(url).pathname,duration_ms:Math.round(performance.now()-started)}));}}
- async function groq(instructions,data){const d=await post('https://api.groq.com/openai/v1/chat/completions',groqKey,{model,temperature:0,response_format:{type:'json_object'},max_completion_tokens:1600,messages:[{role:'system',content:safety+' '+instructions},{role:'user',content:JSON.stringify(data)}]});return JSON.parse(d.choices?.[0]?.message?.content||'{}');}
+ async function groq(instructions,data){const d=await post('https://api.groq.com/openai/v1/chat/completions',groqKey,{model,temperature:0,response_format:{type:'json_object'},max_completion_tokens:1600,messages:[{role:'system',content:safety+' '+instructions},{role:'user',content:JSON.stringify(data)}]});console.info(JSON.stringify({stage:'groq_usage',model,prompt_tokens:Number(d.usage?.prompt_tokens||0),completion_tokens:Number(d.usage?.completion_tokens||0),total_tokens:Number(d.usage?.total_tokens||0)}));return JSON.parse(d.choices?.[0]?.message?.content||'{}');}
  try{
-  const extraction=await groq('Extract 1–4 concrete, checkable achievement claims. Return {"coherent":boolean,"claims":["text"]}. Reject gibberish, not merely unfamiliar achievements.',{headline:story.headline,summary:story.summary,classification:story.classification,impact:story.impact,institution:story.institution,date:story.achievement_date});
+  const extraction=await groq('Extract 1–4 concrete, checkable achievement claims. Return {"coherent":boolean,"claims":["text"]}. Reject gibberish, not merely unfamiliar achievements.',{headline:story.headline,summary:story.summary,narrative:story.narrative,classification:story.classification,impact:story.impact,institution:story.institution,date:story.achievement_date});
   if(extraction.coherent===false)return result('rejected','insufficient_content');
   if(extraction.coherent!==true||!Array.isArray(extraction.claims)||!extraction.claims.length||extraction.claims.length>4||extraction.claims.some(c=>typeof c!=='string'||!c.trim()||c.length>2000))throw Error('invalid_extraction');
   const supplied=publicURL(story.evidence_url);

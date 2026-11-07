@@ -8,7 +8,10 @@ export function normalizeEvidence(value='') {
 export function submissionMessage(error){
  const detail=String(error?.message||'');
  if(detail.includes('evidence_url'))return 'The evidence link was not accepted. Use a complete http or https URL, without spaces or line breaks.';
- if(error?.code==='42501'||/row.level security|institutional email/i.test(detail))return 'A confirmed DU institutional email is required to submit. Please verify your email and sign in again.';
+ if(error?.code==='42501'||/row.level security/i.test(detail))return 'This action is not permitted for your account. Submission requires a confirmed DU account or an administrator; editorial access also requires MFA. Sign in again if your access recently changed.';
+ if(/institutional email/i.test(detail))return 'A confirmed DU institutional email or administrator account is required to submit. Please verify your email and sign in again.';
+ if(/narrative/.test(detail))return 'The full story must contain 80 to 20,000 characters.';
+ if(/achievement_date/.test(detail))return 'Select a valid achievement date that is not in the future.';
  if(/author_name/.test(detail))return 'Your author name must contain 2 to 100 characters.';
  if(/summary/.test(detail))return 'Your summary must contain 30 to 600 characters.';
  if(/headline/.test(detail))return 'Your headline must contain 10 to 120 characters.';
