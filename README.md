@@ -64,10 +64,10 @@ Netlify publishes dist, builds with `npm ci && npm run build`, and bundles netli
 
 The Netlify badge is disabled in the project's `built_with_badge_enabled` setting, for all visitors. The strict CSP also prevents its injected inline script from rendering.
 
-Functions-only secrets (never commit values):
+Server secrets (never commit values; restrict to Functions where the plan permits):
 
 - GROQ_API_KEY, TAVILY_API_KEY, SUPABASE_SECRET_KEY
-- VERIFICATION_WORKER_SECRET: random secret of at least 32 characters, generated and configured for this release
+- VERIFICATION_WORKER_SECRET: random secret of at least 32 characters, generated and configured for this release. The current hosting plan requires the same builds/functions/runtime scopes as the existing secrets; the browser bundle only receives explicitly selected public VITE_ variables.
 - Optional GROQ_MODEL (default openai/gpt-oss-120b)
 
 Optional build-only public variables: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY; VITE_TURNSTILE_SITE_KEY when enabling CAPTCHA. Redeploy after changing build configuration. `/api/health` reports presence only, not provider credits or delivery guarantees.
