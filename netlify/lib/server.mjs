@@ -4,6 +4,7 @@ const url='https://hfxlcvigujvyuayhzhax.supabase.co';
 const key='sb_publishable_FGN-XtMGVUZairpVWBx36w_LrHZRh6O';
 export const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export function checked(r){if(r.error)throw Error('Database operation failed.');return r.data;}
+export async function timed(stage,operation){const started=performance.now();try{return await operation();}finally{console.info(JSON.stringify({stage,duration_ms:Math.round(performance.now()-started)}));}}
 export async function authenticate(req){
  const token=req.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1];if(!token)throw Object.assign(Error('Sign in first.'),{status:401});
  const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:`Bearer ${token}`}}});

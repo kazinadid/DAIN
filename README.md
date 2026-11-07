@@ -75,3 +75,13 @@ https://supabase.com/docs/guides/auth/password-security#password-strength-and-le
 Real DUNITE SSO, newsroom placement tracking, audience-reach measurement and malware scanning are not implemented. No automatic account bypass or self-assigned editor role exists.
 
 Original source reference: https://github.com/Neha-hub-maker/DAIN-New
+
+## 2026-11-07 authentication, access and performance update
+
+- Signup uses a code-only Supabase confirmation template. Recovery uses the same SMTP through Supabase resetPasswordForEmail, then verifies a recovery OTP and changes the password. The owner confirmed both link-free email templates are saved.
+- Login errors are shown inside the modal, rather than behind it. Invalid evidence links and future achievement dates are rejected before saving.
+- Editorial UI and private editorial database access are administrator-only. Members have a My submissions view scoped by their authenticated user ID.
+- Initial UI no longer waits for Supabase calls. Role/profile queries run concurrently. AI verification is a Netlify background function: submission waits for queue acceptance, not provider results.
+- Tailwind is compiled at build time with the original forms/container-query plugins. Local font preload replaces the redundant Google Sans CDN stylesheet. The displayed logo is a 4.6 KB WebP instead of the 963 KB PNG. Original source assets remain preserved.
+- Static assets have CDN/browser cache headers. Verification can reuse an immutable submission's completed result for 15 minutes; it never reuses authorization decisions. Provider and verification database-stage durations are logged without story text or credentials.
+- No extra Supabase Edge proxy was added: the database is already in Singapore, and direct client requests avoid an additional hop. Provider timing should guide any future regional experiment.

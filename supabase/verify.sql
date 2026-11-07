@@ -5,7 +5,7 @@ insert into auth.users(id,email,email_confirmed_at) values
  ('10000000-0000-4000-8000-000000000002','dain-test-editor@du.ac.bd',now()),
  ('10000000-0000-4000-8000-000000000003','dain-test-other@du.ac.bd',now()),
  ('10000000-0000-4000-8000-000000000004','dain-test-outsider@example.com',now());
-insert into private.staff values('10000000-0000-4000-8000-000000000002','editor');
+insert into private.staff values('10000000-0000-4000-8000-000000000002','admin');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true);
 insert into public.submissions(headline,summary,narrative,sector,achievement_date,author_name)
@@ -30,7 +30,7 @@ do $$ declare denied boolean := false; begin
 end $$;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',true);
 do $$ declare sid uuid; denied boolean := false; begin
- if public.my_role() <> 'editor' then raise exception 'FAIL: editor role not found'; end if;
+ if public.my_role() <> 'admin' then raise exception 'FAIL: editor role not found'; end if;
  select id into sid from public.submissions limit 1;
  begin perform public.review_story(sid,'published','Skip approval'); exception when others then denied:=true; end;
  if not denied then raise exception 'FAIL: publication skipped approval'; end if;

@@ -12,8 +12,7 @@ async function account(){
  session=check(await db.auth.getSession()).session;
  if(!session)return null;
  const user=check(await db.auth.getUser()).user;
- const role=check(await db.rpc('my_role'));
- const profile=check(await db.from('profiles').select('*').eq('id',user.id).maybeSingle());
+ const [role,profile]=await Promise.all([db.rpc('my_role').then(check),db.from('profiles').select('*').eq('id',user.id).maybeSingle().then(check)]);
  return {name:profile?.display_name||user.user_metadata.display_name||user.email.split('@')[0],email:user.email,role:role==='admin'?'Admin':role==='editor'?'Editor':'Student',institution:profile?.department||'University of Dhaka',isVerified:!!user.email_confirmed_at,isLoggedIn:true};
 }
 const ready=db.auth.getSession().then(r=>{session=check(r).session;});
@@ -28,21 +27,27 @@ async function list(){
 async function api(path,body){
  session=check(await db.auth.getSession()).session;if(!session)throw Error('Sign in with a confirmed account first.');
  const response=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify(body)});
+ if(response.status===202)return {queued:true};
  const data=await response.json();if(!response.ok)throw Error(data.detail||'Request failed.');return data;
 }
 window.DAIN={ready,entryHash,account,list,
+ async mine(){const user=check(await db.auth.getUser()).user;if(!user)throw Error('Sign in first.');return check(await db.from('submissions').select('*').eq('owner_id',user.id).order('created_at',{ascending:false})).map(s=>mapped(s));},
+ async forgot(email){check(await db.auth.resetPasswordForEmail(email));},
+ async reset(email,token,password){check(await db.auth.verifyOtp({email,token,type:'recovery'}));check(await db.auth.updateUser({password}));check(await db.auth.signOut({scope:'global'}));},
  async login(email,password){check(await db.auth.signInWithPassword({email,password}));return account();},
  async register(name,email,password){const d=check(await db.auth.signUp({email,password,options:{data:{display_name:name},emailRedirectTo:location.origin}}));if(d.session)return account();return null;},
  async verify(email,token){check(await db.auth.verifyOtp({email,token,type:'signup'}));return account();},
  async logout(){check(await db.auth.signOut());session=null;},
  async submit(payload){
+  if(payload.evidenceLink){let u;try{u=new URL(payload.evidenceLink);}catch{throw Error('Enter a valid evidence URL, including https://.');}if(!['https:','http:'].includes(u.protocol))throw Error('Evidence must use http or https.');}
+  if(payload.achievementDate>new Date().toISOString().slice(0,10))throw Error('Achievement date cannot be in the future.');
   const user=check(await db.auth.getUser()).user;if(!user)throw Error('Sign in first.');
   if(user.email.toLowerCase()!==payload.authorEmail.toLowerCase())throw Error('The author email must match your confirmed account.');
   const person=await account();
   const s=check(await db.from('submissions').insert({headline:payload.headline,summary:payload.summary,narrative:payload.summary,sector:sectorMap[payload.category],achievement_date:payload.achievementDate,evidence_url:payload.evidenceLink,author_name:person.name,institution:payload.institution,classification:payload.subType,impact:payload.impact,syndication_consent:true}).select().single());
   check(await db.rpc('submit_story',{story_id:s.id}));
   let verification;
-  try{verification=await api('verify',{submission_id:s.id});}
+  try{await api('verify',{submission_id:s.id});verification={status:'verification_pending',reason:'Saved successfully. Verification is queued in the background.',claims:[],stages:[{id:'identity',status:'passed',detail:'Confirmed account.'},{id:'editorial',status:'held',detail:'Background verification queued.'},{id:'routing',status:'held',detail:'Awaiting editorial review.'}]};}
   catch(err){verification={status:'verification_pending',reason:err.message,claims:[],stages:[{id:'identity',status:'passed',detail:'Confirmed institutional account.'},{id:'editorial',status:'held',detail:err.message},{id:'routing',status:'held',detail:'Editorial approval required.'}]};}
   return {...verification,submission_id:s.id};
  },

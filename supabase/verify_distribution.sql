@@ -2,7 +2,7 @@ begin;
 insert into auth.users(id,email,email_confirmed_at) values
  ('20000000-0000-4000-8000-000000000001','distribution-member@du.ac.bd',now()),
  ('20000000-0000-4000-8000-000000000002','distribution-editor@du.ac.bd',now());
-insert into private.staff values('20000000-0000-4000-8000-000000000002','editor');
+insert into private.staff values('20000000-0000-4000-8000-000000000002','admin');
 insert into public.submissions(id,owner_id,headline,summary,narrative,sector,achievement_date,author_name,status,syndication_consent)
 values('20000000-0000-4000-8000-000000000010','20000000-0000-4000-8000-000000000001','A distribution test achievement','A verified summary for distribution integration testing.',repeat('A factual achievement story. ',5),'Academic & Research','2026-01-01','Test Author','published',true);
 insert into public.stories(id,headline,summary,narrative,sector,author_name,institution,achievement_date)
