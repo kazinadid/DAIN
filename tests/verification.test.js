@@ -12,7 +12,7 @@ const story={headline:'University researchers receive a national award',summary:
 test('verification uses search evidence and always holds distribution',async()=>{
  let groqCalls=0;
  const fetcher=async(url,opts)=>{
-  if(url.includes('groq'))return Response.json({choices:[{message:{content:JSON.stringify(++groqCalls===1?{coherent:true,claims:['The team received a national award.']}:{verdict:'verified',confidence:.9,sources:['https://du.ac.bd/news']})}}]});
+  if(url.includes('groq'))return Response.json({choices:[{message:{content:JSON.stringify(++groqCalls===1?{coherent:true,claims:[{text:'The team received a national award.',search_query:'university team award',verification_query:'official award results',context_needed:[]}]}:{assessments:[{id:0,verdict:'verified',entity_match:true,event_match:true,date_match:true,explanation:'The official announcement directly confirms the award.',evidence:[{url:'https://du.ac.bd/news',quote:'The university team received the national award.',relationship:'supports',primary:true}]}]})}}]});
   return Response.json({results:[{url:'https://du.ac.bd/news',content:'The university team received the national award.'}]});
  };
  const r=await verifyStory(story,{groqKey:'test',tavilyKey:'test',fetcher});assert.equal(r.status,'verified');assert.equal(r.stages[2].status,'held');assert.equal(r.claims[0].sources[0],'https://du.ac.bd/news');

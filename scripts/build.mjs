@@ -16,6 +16,7 @@ function replace(a,b){if(!js.includes(a))throw Error('Missing frontend integrati
 function section(a,b,content){const i=js.indexOf(a),j=js.indexOf(b,i);if(i<0||j<0)throw Error('Missing integration section '+a);js=js.slice(0,i)+content+'\n\n      '+js.slice(j);}
 replace('(() => {','(async () => {');replace('"use strict";','"use strict";\n      ');
 replace('let stories = JSON.parse(localStorage.getItem("dain_stories")) || seedStories;','let stories = [];');
+section('function triggerSkeletonTransition(callback) {','// Public vs App Workspace Modes',`function triggerSkeletonTransition(callback){callback();}`);
 section('let savedUser = null;','let currentUser =','const savedUser = null;');
 section('window.handleSignOut = function() {','window.handleLoginSubmit =',`window.handleSignOut = async function() {
         try {await DAIN.logout();sessionStorage.removeItem('dain_api_session');localStorage.removeItem('dain_user');location.reload();}catch(error){showToast(error.message,'error');}
@@ -85,18 +86,20 @@ section('const seedStories = [','let stories =','');
 // Validate every wizard stage before advancing; administrators may use their confirmed account email.
 replace('if (!isDUInstitutionalEmail(em)) {',"if (currentUser.role !== 'Admin' && !isDUInstitutionalEmail(em)) {");
 replace('wizardStep = 2;',`const narrative=document.getElementById('narrative');if(!narrative.checkValidity()){narrative.reportValidity();showToast('Write the full story (80–20,000 characters) before continuing.','error');return;}wizardStep = 2;`);
-replace('if (!inst) {',`if(date>new Date().toLocaleDateString('en-CA')){highlightErrorField('achievement-date');showToast('The achievement date cannot be in the future.','error');return;}
+replace('if (!inst) {',`if(date>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())){highlightErrorField('achievement-date');showToast('The achievement date cannot be in the future.','error');return;}
             const evidence=document.getElementById('evidence-link');if(evidence.value.trim()){try{const u=new URL(evidence.value.trim());if(!['https:','http:'].includes(u.protocol)||u.username||u.password)throw Error();evidence.value=u.href;}catch{highlightErrorField('evidence-link');showToast('Enter a complete http or https evidence link without login details.','error');return;}}
             if (!inst) {`);
 replace('await animatePipeline(verification.stages);','// Saving is confirmed immediately; provider work continues in the background.');
 replace('Please check the certification box to authorize syndication.','Please certify that this story is authentic.');
 replace("stories=await DAIN.list();completeAuthSuccess(user,user.role==='Admin'?'admin':'home');", "completeAuthSuccess(user,user.role==='Admin'?'admin':'home');DAIN.list().then(rows=>{stories=rows;renderHomeFeatured();}).catch(error=>showToast('Signed in, but stories could not load: '+error.message,'error'));");
 section('function renderStoriesDirectory(filterSector = "All") {','function renderSectorGrid(',`function renderStoriesDirectory(filterSector='All'){window.DAINUI?.publicList('stories-directory-grid',filterSector);}`);
+section('function renderSectorGrid(sector, id) {','function renderAdminSubmissions() {',`function renderSectorGrid(sector,id){window.DAINUI?.publicList(id,sector);}`);
 section('function renderAdminSubmissions() {','window.approveAdminStory =',`function renderAdminSubmissions(){window.DAINUI?.adminList();}\n      `);
 replace('localStorage.setItem("dain_user", JSON.stringify(user));','// Session identity is managed by Supabase Auth; no duplicate PII copy.');
 replace('// Restore saved user session & draft on load',`window.DAINUI=window.installDAINUI({escapeHTML,getUser:()=>currentUser,renderCard:renderStoryCardHTML});\n      // Restore saved user session & draft on load`);
 js=js.replace('} catch (e) {}','} catch (e) {showToast(\"Your saved draft could not be restored. Please check the form before continuing.\",\"error\");}');
 js=js.replaceAll('s.status === "Approved"','s.rawStatus === "published"').replaceAll('story.status === "Approved"','story.rawStatus === "published"').replaceAll('story.status !== "Approved"','story.rawStatus !== "published"');
+js=js.replace('<span>Confidence: ${escapeHTML(confidence)}</span>','<span>AI assessment · requires human review</span>');
 const output=original.slice(0,start+8)+js+original.slice(end);
 // Protect the exact retained design: all HTML/CSS outside the application script is identical.
 if(output.slice(0,start)!==original.slice(0,start)||output.slice(output.lastIndexOf('</script>'))!==original.slice(original.lastIndexOf('</script>')))throw Error('Original frontend markup changed');

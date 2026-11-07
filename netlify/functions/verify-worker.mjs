@@ -10,7 +10,7 @@ export default async req=>{
   if(claimed.length!==1)return json({detail:'Run already claimed or missing.'},409);run=claimed[0];
   const story=checked(await timed('db_worker_story',()=>admin.from('submissions').select('*').eq('id',run.submission_id).eq('owner_id',run.user_id).single()));
   if(story.status!=='submitted')throw Error('Submission state changed before verification.');
-  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),28000);let verification;
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),65000);let verification;
   try{verification=await verifyStory(story,{groqKey:env('GROQ_API_KEY'),tavilyKey:env('TAVILY_API_KEY'),model:env('GROQ_MODEL')||'openai/gpt-oss-120b',signal:controller.signal});}finally{clearTimeout(timer);}
   verification.checked_at=new Date().toISOString();verification.input_hash=storyHash(story,env('GROQ_MODEL'));
   checked(await timed('db_complete_run',()=>admin.from('verification_runs').update({status:verification.status,result:verification,completed_at:new Date().toISOString()}).eq('id',run.id)));

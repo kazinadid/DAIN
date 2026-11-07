@@ -86,3 +86,27 @@ Supabase dashboard checklist:
 `SENDS_ENABLED=false` is a source constant in distribute.mjs. No scheduled sender, emails, scraped recipients or invented reach metrics are enabled. The media panel shows real configured recipient/job state, not marketing claims. Preparing a queue requires publication, explicit syndication consent and active approved newsroom recipients. Queue uniqueness and exclusive claims prevent duplicate delivery attempts. Takedown removes pending jobs with its public story.
 
 Future delivery enablement needs separate approval, the owner's approved recipient list and verified sender/provider configuration. Provider acceptance is not inbox delivery, placement, or audience reach. Those measurements and signed delivery webhooks are not implemented.
+
+### Evidence review v3
+
+AI verification assists an administrator; it does not establish truth or publish a story.
+The background worker extracts up to four material claims and runs up to two searches
+per claim (Tavily advanced search), plus optional evidence-link extraction. A single
+batched Groq assessment returns exact source quotations, explanations and context gaps.
+Supporting quotations must be present in retrieved text, match the claim's entity,
+event and date, and meet the independent-source gate. Matching titles, keyword overlap,
+model confidence and duplicate excerpts are insufficient. Missing evidence is held for
+review; it is not treated as a contradiction. These are safeguards, not a calibrated
+accuracy guarantee. Editors must still open and review original sources.
+
+Owners and administrators can retry submitted stories from their details. Existing
+per-story and daily limits remain enforced. Only administrators see full AI reports;
+owners can track run status. A provider failure stays pending and can be retried. The
+worker has a 65-second application deadline; search requests have a 15-second deadline,
+and model requests 25 seconds. Increasing search depth increases provider usage compared
+with the earlier single basic query. No newsroom emails are sent by these changes.
+
+The theme defaults to the device preference until explicitly changed. Use **Use device**
+to clear the saved choice. The palette covers static and dynamically generated screens.
+Run `npm test` and `npm run test:sql` before deployment. `vite.config.js` permits only the
+named local preview host in addition to Vite's normal defaults.

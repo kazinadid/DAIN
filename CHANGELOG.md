@@ -38,3 +38,12 @@
 - Removed the authenticator requirement at the owner's request. Signed-in administrators can open Editorial Review, Media Network and Analytics directly.
 - Removed enrollment/challenge UI and unused browser MFA calls. Database policies and server gates still require the protected administrator role.
 - Added an idempotent migration and assertions proving admins can access editorial features at aal1 while members and anonymous users remain blocked.
+
+## 2026-11-07 — Dark theme and evidence review
+
+- Replaced incomplete dark overrides with coordinated canvas, surface, text, form, dialog, navigation, and status colors. Fixed the pale hero and loading surfaces, added device-theme selection, cross-tab theme synchronization, and visible keyboard focus.
+- Removed artificial full-screen navigation delays. Sector pages now fetch paginated results instead of filtering only the first page. Stale failed searches cannot overwrite a newer result. Added stable pagination ordering and bounded verification requests.
+- Verification v3 uses neutral and official-results searches, a batched assessment, exact quoted evidence, entity/event/date checks, independent-source gates, and explicit missing-context explanations. Keyword overlap and generic pages no longer establish verification. Confidence percentages are omitted from reports.
+- Added owner/admin retry controls, persisted checking status, evidence reports in editorial decision dialogs, and separate publication acknowledgement. Failed checks are not reused as successful cache hits. Workers stay within their deployment environment and retain signed authorization.
+- Added resend-code cooldown, external AI processing notice, offline feedback, complete press-kit copying, safe draft storage access, local-preview UUID compatibility, and keyboard skip navigation.
+- Validation: production build and 26 automated tests; disposable database permission/workflow assertions; desktop browser review of dark/light landing, authentication dialog, and public browsing. Live authenticated provider verification remains a separate production check.
