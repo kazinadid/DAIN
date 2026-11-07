@@ -41,7 +41,8 @@ section('async function requestStoryVerification(payload) {','function createSto
 replace('const status = verification.status === "verified" ? "Approved" : (verification.status === "rejected" ? "Rejected" : "Pending Review");','const status = "Pending Review";');
 replace('id: createStoryId(), headline: payload.headline, summary: payload.summary,','id: verification.submission_id, headline: payload.headline, summary: payload.summary,');
 replace('localStorage.setItem("dain_stories", JSON.stringify([newStory, ...stories]));','// Submission and AI results were persisted by the backend.');
-replace('stories.unshift(newStory);','stories = await DAIN.list();');
+replace('stories.unshift(newStory);','try { stories = await DAIN.list(); } catch { appendPipelineLog("Story saved, but the list could not refresh. Open My submissions to check it before retrying."); }');
+replace('showToast("Could not save this submission. Your form has been kept; please try again.", "error");','showToast(error.message || "Could not save this submission. Your form has been kept; please try again.", "error");');
 replace('showToast("Story submitted and syndicated to 100+ media outlets!", "verified");','showToast("Story published. Distribution status is shown in the media network.", "verified");');
 replace("story.authorEmail || 'contact@du.ac.bd'","story.authorEmail || 'Contact not shared'");
 // Refresh remote records and the existing status panels without changing source markup or CSS.
@@ -58,6 +59,7 @@ replace('// Restore saved user session & draft on load',`async function renderDi
       if(DAIN.entryHash.startsWith('#/auth'))openAuthModal(DAIN.entryHash.includes('register')?'register':'login');
       // Restore saved user session & draft on load`);
 replace('window.switchView = function(viewName, skipHistory = false) {',`window.switchView = function(viewName, skipHistory = false) {
+ if(viewName==='submit' && currentUser.isLoggedIn && !isDUInstitutionalEmail(currentUser.email)){showToast('To submit a story, sign in with your confirmed DU institutional email. Gmail administrators can review stories but cannot submit as a DU author.','error');return;}
  if(viewName==='admin' && currentUser.role!=='Admin'){showToast('Only administrators can open Editorial Review.','error');return;}`);
 replace("s.status === 'Pending Review' ?", "s.status === 'Pending Review' && currentUser.role === 'Admin' ?");
 replace('// Restore saved user session & draft on load',`

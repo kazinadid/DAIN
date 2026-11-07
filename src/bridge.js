@@ -1,8 +1,9 @@
 import {createClient} from '@supabase/supabase-js';
+import {normalizeEvidence,submissionMessage} from './submission-errors.js';
 const url='https://hfxlcvigujvyuayhzhax.supabase.co';
 const key='sb_publishable_FGN-XtMGVUZairpVWBx36w_LrHZRh6O';
 const db=createClient(url,key);
-const check=r=>{if(r.error)throw r.error;return r.data;};
+const check=r=>{if(r.error)throw Object.assign(new Error(submissionMessage(r.error)),{code:r.error.code});return r.data;};
 const sectorMap={Academic:'Academic & Research',Professional:'Professional & Corporate',Entrepreneurial:'Entrepreneurship & Startups','Social Impact':'Social Impact & Community',Personal:'Personal Milestones'};
 const reverse=Object.fromEntries(Object.entries(sectorMap).map(([k,v])=>[v,k]));
 let session=null;
@@ -39,9 +40,11 @@ window.DAIN={ready,entryHash,account,list,
  async verify(email,token){check(await db.auth.verifyOtp({email,token,type:'signup'}));return account();},
  async logout(){check(await db.auth.signOut());session=null;},
  async submit(payload){
+  payload={...payload,evidenceLink:normalizeEvidence(payload.evidenceLink)};
   if(payload.evidenceLink){let u;try{u=new URL(payload.evidenceLink);}catch{throw Error('Enter a valid evidence URL, including https://.');}if(!['https:','http:'].includes(u.protocol))throw Error('Evidence must use http or https.');}
   if(payload.achievementDate>new Date().toISOString().slice(0,10))throw Error('Achievement date cannot be in the future.');
   const user=check(await db.auth.getUser()).user;if(!user)throw Error('Sign in first.');
+  if(!user.email_confirmed_at||!/@(?:[a-z0-9-]+\.)*du\.ac\.bd$/i.test(user.email))throw Error('To submit a story, sign in with your confirmed DU institutional email. A Gmail administrator account can review stories but cannot submit as a DU author.');
   if(user.email.toLowerCase()!==payload.authorEmail.toLowerCase())throw Error('The author email must match your confirmed account.');
   const person=await account();
   const s=check(await db.from('submissions').insert({headline:payload.headline,summary:payload.summary,narrative:payload.summary,sector:sectorMap[payload.category],achievement_date:payload.achievementDate,evidence_url:payload.evidenceLink,author_name:person.name,institution:payload.institution,classification:payload.subType,impact:payload.impact,syndication_consent:true}).select().single());

@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {normalizeEvidence,submissionMessage} from '../src/submission-errors.js';
+test('evidence links are normalized before database validation',()=>{assert.equal(normalizeEvidence(' HTTPS://EXAMPLE.ORG/a b\n'),'https://example.org/a%20b');assert.equal(normalizeEvidence(''), '');assert.throws(()=>normalizeEvidence('not a url'));assert.throws(()=>normalizeEvidence('javascript:alert(1)'));assert.throws(()=>normalizeEvidence('https://user:password@example.org'));});
+test('database failures receive actionable messages',()=>{assert.match(submissionMessage({code:'23514',message:'violates submissions_evidence_url_check'}),/evidence link/);assert.match(submissionMessage({code:'42501',message:'row level security policy'}),/confirmed DU/);});
+test('the reported CPHOF URL is preserved and accepted',()=>{const url='https://cphof.org/profile/icpc:Yeamin%20Kaiser';assert.equal(normalizeEvidence(url),url);});
