@@ -32,3 +32,9 @@
 - Added npm install/test checks and a disposable PostgreSQL 16 service with Supabase stubs.
 - Migrations are applied twice for idempotency, then all SQL assertion scripts run. Local embedded PostgreSQL provides the same assertion workflow without Docker.
 - No test sends emails or contacts AI providers. Actual inbox OTP and administrator authenticator enrollment still require the account owner's manual verification.
+
+## Administrator sign-in update - 7 November 2026
+
+- Removed the authenticator requirement at the owner's request. Signed-in administrators can open Editorial Review, Media Network and Analytics directly.
+- Removed enrollment/challenge UI and unused browser MFA calls. Database policies and server gates still require the protected administrator role.
+- Added an idempotent migration and assertions proving admins can access editorial features at aal1 while members and anonymous users remain blocked.

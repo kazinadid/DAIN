@@ -28,7 +28,7 @@ npm run dev
 - `create_and_submit_story(request_id,payload)` creates the story and audit event in one transaction. Retrying a request ID returns the existing story. Narrative must contain 80–20,000 characters. Authenticity certification and optional syndication consent are separate stored choices.
 - Owners may delete drafts, read their notes, and edit/resubmit draft or changes_requested stories through checked RPCs. Statuses remain distinct: draft, submitted, changes_requested, approved, rejected and published.
 - Editorial Review uses required explanatory notes and explicit confirmation. Approval is available only for submitted stories. Publication is a separate action. Administrators cannot review their own stories. Takedown removes the public projection and delivery jobs and records the reason.
-- The active staff role is admin. The obsolete editor role is rejected by the database. Editorial RPCs and policies require JWT aal2; the UI provides authenticator enrollment and session verification. Guests/members never see Admin & Reach navigation.
+- The active staff role is admin. The obsolete editor role is rejected by the database. Editorial RPCs and policies require a signed-in administrator role. Authenticator MFA is not required, as requested by the owner. Guests/members never see Admin & Reach navigation.
 - Profiles are created from safe display metadata on auth.users insert. Display metadata never grants privileges. User erasure cascades their stories and private records; surviving review entries anonymize erased reviewers. Storage objects require separate Auth/Storage erasure handling where uploads exist.
 
 ## Verification and performance
@@ -56,7 +56,9 @@ insert into private.staff(user_id,role) values ('<confirmed-user-uuid>','admin')
 on conflict(user_id) do update set role='admin';
 ```
 
-The person must then sign in and complete authenticator MFA. Never put personal administrator emails in migrations. New administrator grants are a separate access decision.
+The person must then sign in normally. Never put personal administrator emails in migrations. New administrator grants are a separate access decision.
+
+The follow-up migration `20261107163000_admin_without_mfa.sql` removes the administrator MFA requirement without changing role grants, ownership rules or public access.
 
 ## Hosting and manual settings
 
@@ -77,8 +79,7 @@ Supabase dashboard checklist:
 1. Keep custom SMTP and production Site URL/redirect allow list configured. Confirm-signup template: `Your DAIN verification code is {{ .Token }}`. Reset-password template: `Your DAIN password reset code is {{ .Token }}`. No ConfirmationURL or email links. The owner previously confirmed these templates.
 2. Enable [leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) if available on the project plan. The pre-release advisor still reported it disabled; this setting cannot be changed by the connected database tool.
 3. To enable [CAPTCHA](https://supabase.com/docs/guides/auth/auth-captcha), provision Turnstile, add its public site key to the Netlify build environment and deploy, then enable Turnstile with its secret in Supabase Auth. The optional client integration covers signup, password login and reset requests. Do not enable the dashboard setting before the matching client/key is deployed.
-4. Administrators must enroll their own [authenticator MFA](https://supabase.com/docs/guides/auth/auth-mfa/totp) through Editorial Review and keep recovery access safe. No passwords, QR codes or OTPs should be shared in chat.
-5. Revoke sessions before an account erasure, remove any owned Storage objects, then erase the Auth user. Database foreign keys now allow the associated row cleanup.
+4. Revoke sessions before an account erasure, remove any owned Storage objects, then erase the Auth user. Database foreign keys now allow the associated row cleanup.
 
 ## Distribution remains disabled
 

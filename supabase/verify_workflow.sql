@@ -41,7 +41,8 @@ select test.assert((select count(*)=1 from public.submissions),'retry is idempot
 select test.assert((select count(*)=1 from public.reviews),'retry creates one timeline event');
 select test.assert((select status='submitted' and certified_at is not null and not syndication_consent from public.submissions limit 1),'atomic submission and separate certification/consent');
 select test.denied($q$select verification from public.submissions$q$,'%permission denied%');
-select test.denied($q$select public.admin_verification((select id from public.submissions limit 1))$q$,'%MFA%');
+select test.assert(not private.is_editor() and not public.admin_session(),'member cannot acquire editorial access');
+select test.denied($q$select public.admin_verification((select id from public.submissions limit 1))$q$,'%Administrator access%');
 select test.denied($q$select public.delete_own_draft((select id from public.submissions limit 1))$q$,'%own drafts%');
 select test.denied($q$select public.resubmit_story((select id from public.submissions limit 1),test.payload())$q$,'%own draft%');
 select test.denied($q$select public.reserve_verification(auth.uid(),(select id from public.submissions limit 1))$q$,'%permission denied%');
@@ -59,13 +60,13 @@ select public.delete_own_draft((select id from public.submissions limit 1));
 select test.assert((select count(*)=0 from public.submissions),'owner can delete draft');
 select set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claims','{"aal":"aal1"}',true);
-select test.assert(not private.is_editor() and not public.admin_session(),'admin aal1 denied editorial access');
-select test.denied($q$select public.review_story(gen_random_uuid(),'approved','Evidence checked')$q$,'%MFA%');
+select test.assert(private.is_editor() and public.admin_session(),'admin access works without MFA');
+select test.denied($q$select public.review_story(gen_random_uuid(),'approved','Evidence checked')$q$,'%Story not found%');
 -- A confirmed administrator may submit with a non-DU address and has no submission cap.
 do $$begin for i in 1..17 loop perform public.create_and_submit_story(gen_random_uuid(),test.payload());end loop;end$$;
-select test.assert((select count(*)=17 from public.submissions),'admin submission limit exemption');
+select test.assert((select count(*)=17 from public.submissions where owner_id=auth.uid()),'admin submission limit exemption');
 select set_config('request.jwt.claims','{"aal":"aal2"}',true);
-select test.assert(private.is_editor() and public.admin_session(),'admin aal2 permits editorial access');
+select test.assert(private.is_editor() and public.admin_session(),'admin role also works for an existing MFA session');
 select test.denied($q$select public.review_story((select id from public.submissions where owner_id=auth.uid() limit 1),'approved','Checked evidence')$q$,'%Another administrator%');
 select test.denied($q$select public.review_story((select id from public.submissions where client_request_id='30000000-0000-4000-8000-000000000010'),'approved','')$q$,'%Explain your decision%');
 select public.review_story((select id from public.submissions where client_request_id='30000000-0000-4000-8000-000000000010'),'changes_requested','Please add dates and context.');
@@ -122,5 +123,5 @@ select test.denied($q$select public.create_and_submit_story(gen_random_uuid(),te
 select test.denied($q$select public.admin_verification(gen_random_uuid())$q$,'%permission denied%');
 select test.assert((select count(*)=0 from public.stories),'anonymous sees only surviving published records');
 reset role;
-select 'PASS: workflow, quota, bootstrap removal, MFA, roles, AI isolation and erasure' as result;
+select 'PASS: workflow, quota, bootstrap removal, administrator roles, AI isolation and erasure' as result;
 rollback;

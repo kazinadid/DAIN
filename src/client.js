@@ -23,8 +23,8 @@ async function account(force=false){
  if(!force&&accountPromise)return accountPromise;
  accountPromise=(async()=>{await ready;const session=check(await auth.getSession()).session;if(!session)return null;
  const user=check(await auth.getUser()).user;
- const [role,profile,assurance]=await Promise.all([rest.rpc('my_role').then(check),rest.from('profiles').select('display_name,department').eq('id',user.id).maybeSingle().then(check),auth.mfa.getAuthenticatorAssuranceLevel()]);
- const value={id:user.id,name:profile?.display_name||user.user_metadata.display_name||'DU Member',email:user.email,role:role==='admin'?'Admin':'Student',institution:profile?.department||'University of Dhaka',isVerified:!!user.email_confirmed_at,isLoggedIn:true,aal:assurance.data?.currentLevel||'aal1'};
+ const [role,profile]=await Promise.all([rest.rpc('my_role').then(check),rest.from('profiles').select('display_name,department').eq('id',user.id).maybeSingle().then(check)]);
+ const value={id:user.id,name:profile?.display_name||user.user_metadata.display_name||'DU Member',email:user.email,role:role==='admin'?'Admin':'Student',institution:profile?.department||'University of Dhaka',isVerified:!!user.email_confirmed_at,isLoggedIn:true};
  cachedAccount=value;accountExpiry=Date.now()+15000;return value;})();
  try{return await accountPromise;}finally{accountPromise=null;}
 }
@@ -56,6 +56,5 @@ const DAIN={ready,entryHash,account,list,labels,
  async resubmit(id,p){const me=await account();check(await rest.rpc('resubmit_story',{story_id:id,payload:payloadOf(p,me)}));try{return await api('verify',{submission_id:id});}catch(error){return {queue_error:error.message};}},
  async distribution(){const me=await account();if(me?.role!=='Admin')return {staff:false,newsrooms:[],jobs:[]};return {staff:true,newsrooms:check(await rest.from('newsrooms').select('id,name,tier,active,approved_at').range(0,19)),jobs:check(await rest.from('distribution_jobs').select('id,story_id,status,attempts,created_at').order('created_at',{ascending:false}).range(0,19))};},
  async queue(id){return check(await rest.rpc('queue_distribution',{story_id:id}));},
- mfa:{async factors(){return (check(await auth.mfa.listFactors()).all||[]).filter(f=>f.factor_type==='totp');},async clearUnverified(id){check(await auth.mfa.unenroll({factorId:id}));},async enroll(){return check(await auth.mfa.enroll({factorType:'totp',friendlyName:'DAIN administrator'}));},async verify(factorId,code){const c=check(await auth.mfa.challenge({factorId}));check(await auth.mfa.verify({factorId,challengeId:c.id,code}));return account(true);}}
 };
 window.DAIN=DAIN;window.DAIN_API_BASE=location.origin+'/api';window.installDAINUI=hooks=>{installCaptcha();return installUI(DAIN,hooks);};
