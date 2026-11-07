@@ -15,7 +15,7 @@ export default async req=>{
   verification.checked_at=new Date().toISOString();verification.input_hash=storyHash(story,env('GROQ_MODEL'));
   checked(await timed('db_complete_run',()=>admin.from('verification_runs').update({status:verification.status,result:verification,completed_at:new Date().toISOString()}).eq('id',run.id)));
   // Do not overwrite a story that left the submitted state during the paid request.
-  checked(await timed('db_complete_story',()=>admin.from('submissions').update({verification}).eq('id',story.id).eq('status','submitted')));
+  checked(await timed('db_complete_story',()=>admin.from('submissions').update({verification}).eq('id',story.id).eq('status','submitted').eq('updated_at',story.updated_at)));
   return json({completed:true});
  }catch(error){if(admin&&run)await admin.from('verification_runs').update({status:'verification_pending',result:result('verification_pending','Checking was interrupted. An administrator can review the saved story.'),completed_at:new Date().toISOString()}).eq('id',run.id);return json({detail:'Worker could not complete.'},503);}
 };

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
-import {build} from 'vite';
+import {build,loadEnv} from 'vite';
+import {projectConfig} from '../shared/config.mjs';
 import {createHash} from 'node:crypto';
 import vm from 'node:vm';
 import postcss from 'postcss';
@@ -60,7 +61,7 @@ replace('// Restore saved user session & draft on load',`async function renderDi
       if(DAIN.entryHash.startsWith('#/auth'))openAuthModal(DAIN.entryHash.includes('register')?'register':'login');
       // Restore saved user session & draft on load`);
 replace('window.switchView = function(viewName, skipHistory = false) {',`window.switchView = function(viewName, skipHistory = false) {
- if(viewName==='submit' && currentUser.isLoggedIn && currentUser.role!=='Admin' && !isDUInstitutionalEmail(currentUser.email)){showToast('To submit a story, sign in with your confirmed DU institutional email. Administrator accounts may submit with their confirmed login email.','error');return;}
+ if(viewName==='submit' && currentUser.isLoggedIn && currentUser.role!=='Admin' && !isDUInstitutionalEmail(currentUser.email)){showToast('Submitting requires a confirmed DU institutional email. You can still browse published stories and your previous submissions.','error');return;}
  if(viewName==='admin' && currentUser.role!=='Admin'){showToast('Only administrators can open Editorial Review.','error');return;}`);
 replace("s.status === 'Pending Review' ?", "s.status === 'Pending Review' && currentUser.role === 'Admin' ?");
 replace('// Restore saved user session & draft on load',`
@@ -94,6 +95,7 @@ section('function renderStoriesDirectory(filterSector = "All") {','function rend
 section('function renderAdminSubmissions() {','window.approveAdminStory =',`function renderAdminSubmissions(){window.DAINUI?.adminList();}\n      `);
 replace('localStorage.setItem("dain_user", JSON.stringify(user));','// Session identity is managed by Supabase Auth; no duplicate PII copy.');
 replace('// Restore saved user session & draft on load',`window.DAINUI=window.installDAINUI({escapeHTML,getUser:()=>currentUser,renderCard:renderStoryCardHTML});\n      // Restore saved user session & draft on load`);
+js=js.replace('} catch (e) {}','} catch (e) {showToast(\"Your saved draft could not be restored. Please check the form before continuing.\",\"error\");}');
 js=js.replaceAll('s.status === "Approved"','s.rawStatus === "published"').replaceAll('story.status === "Approved"','story.rawStatus === "published"').replaceAll('story.status !== "Approved"','story.rawStatus !== "published"');
 const output=original.slice(0,start+8)+js+original.slice(end);
 // Protect the exact retained design: all HTML/CSS outside the application script is identical.
@@ -108,4 +110,10 @@ await fs.writeFile('dist/assets/'+cssName,css.css);
 await sharp('assets/dunite-logo.png').resize({width:320,withoutEnlargement:true}).webp({quality:85}).toFile('dist/assets/dunite-logo.webp');
 const optimized=output.replace('<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>', '<link rel="stylesheet" href="assets/'+cssName+'">').replace(/<script>\s*tailwind.config[\s\S]*?<\/script>/,'').replaceAll('assets/dunite-logo.png','assets/dunite-logo.webp');
 await fs.writeFile('dist/index.html',await productionHTML(optimized.replace('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/mortezaom/google-sans-cdn@master/fonts.css" />','<link rel="preload" href="assets/fonts/ProductSans-Regular.woff2" as="font" type="font/woff2" crossorigin>')));
+const buildEnv={...loadEnv('production',process.cwd(),'VITE_'),...process.env};
+const apiOrigin=new URL(buildEnv.VITE_SUPABASE_URL||projectConfig.url).origin;
+const challenge=buildEnv.VITE_TURNSTILE_SITE_KEY?' https://challenges.cloudflare.com':'';
+await fs.writeFile('dist/_headers',`/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'${challenge}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ${apiOrigin} ${apiOrigin.replace('https:','wss:')}${challenge}; frame-src 'self'${challenge}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+`);
 console.log('Original frontend source SHA-256:',createHash('sha256').update(original).digest('hex'));

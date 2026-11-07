@@ -1,4 +1,4 @@
--- Apply only in local/staging during development. Release owner reviews production application.
+-- Reviewed migration. Production application was explicitly authorized by the owner.
 begin;
 drop trigger if exists dain_approved_admin on auth.users;
 drop function if exists private.assign_approved_admin();
@@ -87,7 +87,7 @@ end $$;
 create or replace function private.unpublish_story(story_id uuid,review_note text) returns void language plpgsql security definer set search_path='' as $$
 begin
  if not private.is_editor() then raise exception 'Administrator access with MFA is required.';end if;
- if length(trim(review_note)) not between 5 and 4000 then raise exception 'A takedown explanation of 5 to 4000 characters is required.';end if;
+ if coalesce(length(trim(review_note)),0) not between 5 and 4000 then raise exception 'A takedown explanation of 5 to 4000 characters is required.';end if;
  perform id from public.submissions where id=story_id and status='published' for update;
  if not found then raise exception 'Only published stories can be taken down.';end if;
  delete from public.stories where id=story_id;
@@ -118,7 +118,7 @@ end $$;
 revoke all on function private.create_profile() from public,anon,authenticated;
 drop trigger if exists dain_create_profile on auth.users;
 create trigger dain_create_profile after insert on auth.users for each row execute function private.create_profile();
-insert into public.profiles(id,display_name) select id,'Member' from auth.users on conflict(id) do nothing;
+insert into public.profiles(id,display_name,department) select id,case when length(trim(coalesce(raw_user_meta_data->>'display_name','')))>=2 then left(trim(raw_user_meta_data->>'display_name'),100) else 'Member' end,left(coalesce(raw_user_meta_data->>'department',''),200) from auth.users on conflict(id) do nothing;
 
 -- Erasure policy: delete private/public story records; retain reviews only with their surviving story, anonymizing erased reviewers.
 alter table public.submissions drop constraint if exists submissions_owner_id_fkey;
@@ -146,8 +146,8 @@ begin
  perform id from auth.users where id=member_id for update;
  if not exists(select 1 from public.submissions where id=story_id and owner_id=member_id and status='submitted') then raise exception 'Submission is not eligible for verification.';end if;
  admin_member:=exists(select 1 from private.staff where user_id=member_id and role='admin');
- if not admin_member and (select count(*) from public.verification_runs where user_id=member_id and created_at>now()-interval '60 seconds')>=5 then raise exception 'rate_limited';end if;
  if not admin_member and (select count(*) from public.verification_runs where user_id=member_id and (created_at at time zone 'Asia/Dhaka')::date=(now() at time zone 'Asia/Dhaka')::date)>=45 then raise exception 'daily_verification_limit';end if;
+ if not admin_member and (select count(*) from public.verification_runs where user_id=member_id and created_at>now()-interval '60 seconds')>=5 then raise exception 'rate_limited';end if;
  if (select count(*) from public.verification_runs where submission_id=story_id)>=3 then raise exception 'story_verification_limit';end if;
  if exists(select 1 from public.verification_runs where submission_id=story_id and status in ('running','queued') and created_at>now()-interval '90 seconds') then raise exception 'verification_in_progress';end if;
  insert into public.verification_runs(user_id,submission_id,status) values(member_id,story_id,'queued') returning id into rid;return rid;

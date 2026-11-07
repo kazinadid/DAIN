@@ -1,87 +1,87 @@
-# DAIN — Original frontend + Supabase
+# DAIN
 
-Website: https://dain-platform.netlify.app
+Live site: https://dain-platform.netlify.app · Repository: https://github.com/kazinadid/DAIN
 
-## Original frontend retained
+## Frontend and build
 
-The source index.html and frontend/original.html are byte-identical copies of Neha-hub-maker/DAIN-New's original frontend, Git blob 3b1c085a9282e7719572da25f777a4ff417fbecc. All original HTML, CSS, fonts, branding, dialogs and navigation markup are retained. The original logo and three Product Sans fonts are copied unchanged.
+`index.html` and `frontend/original.html` preserve the original reference from Neha-hub-maker/DAIN-New. The integrity test compares those files directly; there is no stale hash pin. The production frontend intentionally changes behavior and markup where required for security, accessibility, honest copy, and the updated submission screens. It is not byte-identical to the reference.
 
-scripts/build.mjs replaces only the final application script's data/authentication hooks and writes dist/index.html. It bundles the Supabase adapter as dist/api-config.js, using the original script tag. A build check and test compare every byte outside that application script to the original. The original Tailwind CDN and inline event-handler architecture are preserved; the CSP explicitly permits those dependencies.
+`scripts/build.mjs` patches the retained application, compiles Tailwind, bundles the browser adapter, compresses the logo, and calls `scripts/production-html.mjs`. That module removes demo markup, converts trusted source handlers into static event listeners, and writes external application scripts. The deployed CSP disallows inline scripts and runtime evaluation. Dynamic content is escaped; AI evidence URLs are limited to http(s). There is no GitHub image fallback and no PNG in dist.
 
-Behavior changes: database-backed authentication and stories, server-enforced editorial permissions, no demo privilege escalation, no fake reach/analytics, no local-only publishing, no false dispatch confirmation. The existing Media Network panel displays actual queue state and the disabled sending status. Selecting an editorial affiliation at registration never grants staff access.
+Browser code imports auth-js and postgrest-js rather than supabase-js. Public project configuration has one default in `shared/config.mjs`, overridable with the build variables in `.env.example`. The same resolved URL supplies the CSP. No server secret belongs in a VITE_ variable.
 
-## Build and deploy
+Node 22.12+:
 
-Requires Node 22.12+ or compatible newer Node.
+```sh
+npm ci
+npm test
+npm run test:sql
+npm run dev
+```
 
-- npm ci
-- npm test (builds first, then runs the tests)
-- npm run dev (serves the built frontend; APIs require Netlify dev or a deployed preview)
+`npm test` builds and runs the application/security checks without emails or paid providers. `test:sql` uses disposable embedded PostgreSQL (PGlite), applies the migration twice, and runs every verify*.sql assertion. GitHub Actions additionally uses a real PostgreSQL 16 service with Supabase auth/storage stubs. Never apply test-stubs.sql to a hosted project. Tests roll back their fixtures.
 
-Netlify build: npm ci && npm run build. Publish: dist. Functions: netlify/functions.
-Site ID: 874432cc-5ba3-4f72-8a1e-1e388f3cfeb8.
-Deployment currently uses an authorized local Netlify CLI. GitHub continuous deployment is not connected: pushing does not automatically publish. .netlify/ is ignored. No privileged credentials are committed.
+## Author and editorial workflow
 
-## AI verification
+- Guests read published stories. Normal users see only their own submissions, status timeline and reviewer notes. They cannot read the AI assessment columns, even through the Data API.
+- Confirmed DU users can submit. Confirmed administrators may also submit using their account email. A normal account may create at most 15 stories per Bangladesh calendar day. Administrators have no daily story submission limit. A private ledger and row lock enforce the quota, including deleted drafts and concurrent requests.
+- `create_and_submit_story(request_id,payload)` creates the story and audit event in one transaction. Retrying a request ID returns the existing story. Narrative must contain 80–20,000 characters. Authenticity certification and optional syndication consent are separate stored choices.
+- Owners may delete drafts, read their notes, and edit/resubmit draft or changes_requested stories through checked RPCs. Statuses remain distinct: draft, submitted, changes_requested, approved, rejected and published.
+- Editorial Review uses required explanatory notes and explicit confirmation. Approval is available only for submitted stories. Publication is a separate action. Administrators cannot review their own stories. Takedown removes the public projection and delivery jobs and records the reason.
+- The active staff role is admin. The obsolete editor role is rejected by the database. Editorial RPCs and policies require JWT aal2; the UI provides authenticator enrollment and session verification. Guests/members never see Admin & Reach navigation.
+- Profiles are created from safe display metadata on auth.users insert. Display metadata never grants privileges. User erasure cascades their stories and private records; surviving review entries anonymize erased reviewers. Storage objects require separate Auth/Storage erasure handling where uploads exist.
 
-Set these in Netlify environment variables, Functions scope, then redeploy:
+## Verification and performance
 
-- GROQ_API_KEY
-- TAVILY_API_KEY
-- SUPABASE_SECRET_KEY — secret/service-role key for project hfxlcvigujvyuayhzhax; never put it in frontend configuration.
-- Optional GROQ_MODEL, default openai/gpt-oss-120b.
+`POST /api/verify` is synchronous: it checks authentication, confirmed author eligibility, ownership, state and persistent quotas, reserves a run, and returns a real error or 202 with a run ID. A separate HMAC-authorized background worker performs AI/search work. It atomically claims queued work, preventing duplicate paid work from replayed requests. Clients poll their own run state every three seconds for at most 90 seconds. Authors see save/checking/error state, while assessment details are restricted to the administrator RPC.
 
-POST /api/verify accepts a submission_id with a Supabase Bearer token. The server verifies the actual user, confirmed DU email, ownership and submitted state. It loads the saved story, enforces a persistent per-user quota and an in-flight lock, extracts up to four claims through Groq, searches Tavily, optionally extracts supplied evidence, and assesses claims using retrieved excerpts.
+Normal users have verification limits of five runs/minute and 45/day; every story allows at most three runs. Administrators are exempt from the per-user limits. These are AI retry protections, separate from story submission. A content/model/policy fingerprint safely reuses a matching report for 15 minutes. Changed content or model invalidates it; a worker cannot overwrite a newer edit.
 
-Only exact retrieved URLs can become citations. Unsupported or submitted-domain-only evidence cannot verify claims. Provider failures return verification_pending, never approval. Results are stored by the server; clients cannot write AI verdicts. Human editorial approval and publication remain separate. AI never sends emails or grants public visibility. Author email and account details are excluded from AI prompts. AI assessment is not a guarantee of factual correctness.
+Retrieved URLs are checked against the public suffix list. Sibling hostnames are one registrable domain. Verified assessments require two independent registrable domains with different excerpts, or one independent source with an excerpt matching the claim. Invented citations, private/IP targets and trailing-dot hosts are rejected. AI never approves or publishes a story. Provider errors preserve the story for human review. Timing and numeric token usage are logged without prompts or credentials.
 
-GET /api/health reports configuration presence, with no secrets. Configuration presence does not prove provider credits or model availability. Live authenticated provider acceptance testing is pending until keys and a confirmed DU account are available. The owner requested deployment before adding keys.
+Startup renders before data calls. Account information is cached briefly and invalidated by auth events. Independent role/profile queries run concurrently. Queries select bounded columns and 20-row pages; long narrative loads only on detail. Published-headline search and sector filters operate on the database. Hashed/static assets use cache headers; private API responses use no-store. Dark mode persists as an appearance preference, with reduced-motion styles, native modal focus handling, live feedback, and mobile editorial/submission cards.
 
-## Newsroom distribution
+No extra Supabase Edge proxy was added: the project is in Singapore and another proxy would add a hop without evidence of benefit. Use the timing logs to decide whether a regional experiment is justified.
 
-Real sending is disabled by a source constant in netlify/functions/distribute.mjs, as explicitly requested. No recipient addresses are invented or scraped. No bulk, background or scheduled sender is enabled.
+## Schema and administration
 
-Publication queues jobs only for active, explicitly approved newsrooms and only when the author accepted syndication consent. Queue uniqueness prevents duplicate story/recipient jobs. An exclusive service-side claim prevents concurrent sends. The implemented Resend adapter isolates recipients, uses a stable idempotency key, records actual provider IDs, and caps retries at three.
+Historical applied source order: `supabase/schema.sql`, the now-retired `bootstrap_admin.sql`, `harden_rpc.sql`, `verification_distribution.sql`, **`admin_only.sql`**. Do not rerun these historical scripts on the existing project.
 
-The accepted status means the email provider accepted a request. It does not mean inbox delivery, media placement or audience reach. Failed requests are not recorded as successful.
+New changes are idempotent files in `supabase/migrations/`, in filename order. `20261107093000_workflow_hardening.sql` drops the old email-based bootstrap trigger/table. Existing admin grants are retained; nobody receives admin because they claim or change to a special email. The owner explicitly authorized applying this migration during the 7 November release.
 
-Before enabling delivery in a later approved change:
+To grant a new administrator, verify the person's confirmed account and copy their UUID from Supabase Authentication. A trusted project owner may then run this reviewed manual operation with the actual UUID:
 
-1. Import the owner's approved newsroom list into public.newsrooms through a trusted administrator connection. Set active and approved_at only for approved recipients.
-2. Configure a verified sender, RESEND_API_KEY and NEWSROOM_FROM_EMAIL as Functions secrets. Another provider requires a corresponding adapter.
-3. Complete a single-recipient test with the owner, verify its receipt, then enable sending in source and redeploy.
-4. Add signed provider webhooks if delivered/bounced statuses are required. Those are not implemented here.
+```sql
+insert into private.staff(user_id,role) values ('<confirmed-user-uuid>','admin')
+on conflict(user_id) do update set role='admin';
+```
 
-The original public 100+ newsroom marketing copy is retained as requested. It is not evidence that 100+ recipients are configured. No newsroom contacts or measured audience reach are currently imported.
+The person must then sign in and complete authenticator MFA. Never put personal administrator emails in migrations. New administrator grants are a separate access decision.
 
-## Supabase and administration
+## Hosting and manual settings
 
-Project: hfxlcvigujvyuayhzhax.
-Applied schema source, in order: supabase/schema.sql, bootstrap_admin.sql, harden_rpc.sql, verification_distribution.sql. These are already applied; do not rerun on this project. To bootstrap another empty project, review the administrator email first.
+Netlify publishes dist, builds with `npm ci && npm run build`, and bundles netlify/functions. GitHub is connected. Some builds have been blocked by Netlify's private-repo contributor approval; the owner CLI can publish the tested build. A later successful main-branch build replaces a manual release with that branch's version. `.netlify/` remains ignored.
 
-The approved administrator email is reserved privately and receives its role only after email confirmation. The owner will create that account later. Members require confirmed DU institutional emails to submit. RLS and checked private RPC implementations enforce ownership and roles independently of the UI. Published projections exclude private evidence, account IDs and review notes.
+The Netlify badge is disabled in the project's `built_with_badge_enabled` setting, for all visitors. The strict CSP also prevents its injected inline script from rendering.
 
-The initial private evidence bucket remains available at the storage layer. The exact original frontend exposes an evidence-link field, not a new file-upload interface.
+Functions-only secrets (never commit values):
 
-The owner reports SMTP and production URL settings are configured. Site URL: https://dain-platform.netlify.app. Redirect allow list: https://dain-platform.netlify.app/**. Confirmation emails should use the normal confirmation link. If the email template includes the Supabase signup OTP, the retained code-entry dialog accepts it.
+- GROQ_API_KEY, TAVILY_API_KEY, SUPABASE_SECRET_KEY
+- VERIFICATION_WORKER_SECRET: random secret of at least 32 characters, generated and configured for this release
+- Optional GROQ_MODEL (default openai/gpt-oss-120b)
 
-Database integration tests: supabase/verify.sql and supabase/verify_distribution.sql. They check ownership, eligibility, editorial transitions, audit history, AI tamper protection, quota, recipient approval, queue uniqueness and exclusive send claims. Fixtures are rolled back.
+Optional build-only public variables: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY; VITE_TURNSTILE_SITE_KEY when enabling CAPTCHA. Redeploy after changing build configuration. `/api/health` reports presence only, not provider credits or delivery guarantees.
 
-Two private tables intentionally have RLS with no client policies. Supabase also currently recommends enabling leaked-password protection:
-https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+Supabase dashboard checklist:
 
-## Boundaries
+1. Keep custom SMTP and production Site URL/redirect allow list configured. Confirm-signup template: `Your DAIN verification code is {{ .Token }}`. Reset-password template: `Your DAIN password reset code is {{ .Token }}`. No ConfirmationURL or email links. The owner previously confirmed these templates.
+2. Enable [leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) if available on the project plan. The pre-release advisor still reported it disabled; this setting cannot be changed by the connected database tool.
+3. To enable [CAPTCHA](https://supabase.com/docs/guides/auth/auth-captcha), provision Turnstile, add its public site key to the Netlify build environment and deploy, then enable Turnstile with its secret in Supabase Auth. The optional client integration covers signup, password login and reset requests. Do not enable the dashboard setting before the matching client/key is deployed.
+4. Administrators must enroll their own [authenticator MFA](https://supabase.com/docs/guides/auth/auth-mfa/totp) through Editorial Review and keep recovery access safe. No passwords, QR codes or OTPs should be shared in chat.
+5. Revoke sessions before an account erasure, remove any owned Storage objects, then erase the Auth user. Database foreign keys now allow the associated row cleanup.
 
-Real DUNITE SSO, newsroom placement tracking, audience-reach measurement and malware scanning are not implemented. No automatic account bypass or self-assigned editor role exists.
+## Distribution remains disabled
 
-Original source reference: https://github.com/Neha-hub-maker/DAIN-New
+`SENDS_ENABLED=false` is a source constant in distribute.mjs. No scheduled sender, emails, scraped recipients or invented reach metrics are enabled. The media panel shows real configured recipient/job state, not marketing claims. Preparing a queue requires publication, explicit syndication consent and active approved newsroom recipients. Queue uniqueness and exclusive claims prevent duplicate delivery attempts. Takedown removes pending jobs with its public story.
 
-## 2026-11-07 authentication, access and performance update
-
-- Signup uses a code-only Supabase confirmation template. Recovery uses the same SMTP through Supabase resetPasswordForEmail, then verifies a recovery OTP and changes the password. The owner confirmed both link-free email templates are saved.
-- Login errors are shown inside the modal, rather than behind it. Invalid evidence links and future achievement dates are rejected before saving.
-- Editorial UI and private editorial database access are administrator-only. Members have a My submissions view scoped by their authenticated user ID.
-- Initial UI no longer waits for Supabase calls. Role/profile queries run concurrently. AI verification is a Netlify background function: submission waits for queue acceptance, not provider results.
-- Tailwind is compiled at build time with the original forms/container-query plugins. Local font preload replaces the redundant Google Sans CDN stylesheet. The displayed logo is a 4.6 KB WebP instead of the 963 KB PNG. Original source assets remain preserved.
-- Static assets have CDN/browser cache headers. Verification can reuse an immutable submission's completed result for 15 minutes; it never reuses authorization decisions. Provider and verification database-stage durations are logged without story text or credentials.
-- No extra Supabase Edge proxy was added: the database is already in Singapore, and direct client requests avoid an additional hop. Provider timing should guide any future regional experiment.
+Future delivery enablement needs separate approval, the owner's approved recipient list and verified sender/provider configuration. Provider acceptance is not inbox delivery, placement, or audience reach. Those measurements and signed delivery webhooks are not implemented.

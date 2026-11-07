@@ -54,17 +54,18 @@ select set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000003'
 select test.assert((select count(*)=0 from public.submissions),'another member cannot read stories');
 insert into public.submissions(headline,summary,narrative,sector,achievement_date,author_name)
 select 'A deletable draft story','A sufficiently detailed draft summary for this test.',repeat('Long form draft text. ',8),'Academic & Research',current_date,'Other Author';
+select test.denied($q$select public.submit_story((select id from public.submissions limit 1))$q$,'%certify%');
 select public.delete_own_draft((select id from public.submissions limit 1));
 select test.assert((select count(*)=0 from public.submissions),'owner can delete draft');
 select set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claims','{"aal":"aal1"}',true);
-select test.assert(not private.is_editor(),'admin aal1 denied editorial access');
+select test.assert(not private.is_editor() and not public.admin_session(),'admin aal1 denied editorial access');
 select test.denied($q$select public.review_story(gen_random_uuid(),'approved','Evidence checked')$q$,'%MFA%');
 -- A confirmed administrator may submit with a non-DU address and has no submission cap.
 do $$begin for i in 1..17 loop perform public.create_and_submit_story(gen_random_uuid(),test.payload());end loop;end$$;
 select test.assert((select count(*)=17 from public.submissions),'admin submission limit exemption');
 select set_config('request.jwt.claims','{"aal":"aal2"}',true);
-select test.assert(private.is_editor(),'admin aal2 permits editorial access');
+select test.assert(private.is_editor() and public.admin_session(),'admin aal2 permits editorial access');
 select test.denied($q$select public.review_story((select id from public.submissions where owner_id=auth.uid() limit 1),'approved','Checked evidence')$q$,'%Another administrator%');
 select test.denied($q$select public.review_story((select id from public.submissions where client_request_id='30000000-0000-4000-8000-000000000010'),'approved','')$q$,'%Explain your decision%');
 select public.review_story((select id from public.submissions where client_request_id='30000000-0000-4000-8000-000000000010'),'changes_requested','Please add dates and context.');
@@ -96,6 +97,22 @@ do $$declare sid uuid;rid uuid;begin
  perform test.denied(format('select public.reserve_verification(%L,%L)','30000000-0000-4000-8000-000000000003',sid),'%not eligible%');
 end$$;
 select test.assert((select count(*)=3 from public.verification_runs),'three worker runs recorded');
+-- Five runs per minute and 45 per day apply to normal users across stories.
+do $$declare sid uuid;begin
+ for sid in select id from public.submissions where owner_id='30000000-0000-4000-8000-000000000001' and status='submitted' and id not in(select submission_id from public.verification_runs) limit 2 loop
+  perform public.reserve_verification('30000000-0000-4000-8000-000000000001',sid);
+ end loop;
+ select id into sid from public.submissions where owner_id='30000000-0000-4000-8000-000000000001' and status='submitted' and id not in(select submission_id from public.verification_runs) limit 1;
+ perform test.denied(format('select public.reserve_verification(%L,%L)','30000000-0000-4000-8000-000000000001',sid),'%rate_limited%');
+ insert into public.verification_runs(user_id,submission_id,status) select '30000000-0000-4000-8000-000000000001',sid,'needs_review' from generate_series(1,40);
+ perform test.denied(format('select public.reserve_verification(%L,%L)','30000000-0000-4000-8000-000000000001',sid),'%daily_verification_limit%');
+ select id into sid from public.submissions where owner_id='30000000-0000-4000-8000-000000000002' limit 1;
+ insert into public.verification_runs(user_id,submission_id,status) select '30000000-0000-4000-8000-000000000002',sid,'needs_review' from generate_series(1,45);
+ select id into sid from public.submissions where owner_id='30000000-0000-4000-8000-000000000002' and id not in(select submission_id from public.verification_runs) limit 1;
+ perform public.reserve_verification('30000000-0000-4000-8000-000000000002',sid);
+end$$;
+delete from auth.users where id='30000000-0000-4000-8000-000000000002';
+select test.assert(exists(select from public.reviews where decision='approved' and reviewer_id is null),'erased reviewers are anonymized on surviving stories');
 delete from auth.users where id='30000000-0000-4000-8000-000000000001';
 select test.assert(not exists(select from public.submissions where owner_id='30000000-0000-4000-8000-000000000001'),'user erasure cascades submissions');
 select test.assert((select count(*)=0 from public.verification_runs),'user erasure cascades runs');
