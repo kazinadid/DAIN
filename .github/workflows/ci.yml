@@ -1,0 +1,55 @@
+name: DAIN checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: dain_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-test-only
+      PGDATABASE: dain_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Apply schema and migrations to disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in test-stubs.sql schema.sql harden_rpc.sql verification_distribution.sql admin_only.sql; do
+            psql -v ON_ERROR_STOP=1 -f "supabase/$file"
+          done
+          for pass in 1 2; do
+            for file in supabase/migrations/*.sql; do
+              psql -v ON_ERROR_STOP=1 -f "$file"
+            done
+          done
+      - name: Verify permissions and workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in supabase/verify*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$file"
+          done
