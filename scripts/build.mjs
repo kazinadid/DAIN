@@ -9,6 +9,7 @@ import forms from '@tailwindcss/forms';
 import containers from '@tailwindcss/container-queries';
 import sharp from 'sharp';
 import {productionHTML} from './production-html.mjs';
+import {buildPublicPages} from './public-pages.mjs';
 const original=await fs.readFile('frontend/original.html','utf8');
 const start=original.lastIndexOf('<script>'),end=original.indexOf('</script>',start);
 let js=original.slice(start+8,end);
@@ -120,3 +121,5 @@ await fs.writeFile('dist/_headers',`/*
   Content-Security-Policy: default-src 'self'; script-src 'self'${challenge}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ${apiOrigin} ${apiOrigin.replace('https:','wss:')}${challenge}; frame-src 'self'${challenge}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
 `);
 console.log('Original frontend source SHA-256:',createHash('sha256').update(original).digest('hex'));
+
+await buildPublicPages();

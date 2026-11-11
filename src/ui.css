@@ -68,3 +68,9 @@ dialog{max-height:90dvh;max-width:calc(100vw - 24px);overflow:auto;overscroll-be
 @media(max-width:767px){#public-header-auth{gap:.375rem}#public-header-auth button{padding:.625rem .75rem!important}#public-landing-mode>header>div{gap:.5rem;padding-left:.75rem;padding-right:.75rem}[data-theme-toggle] span:last-child{display:none}[data-theme-toggle]{padding:.5rem!important;min-width:40px}.dain-system-theme{display:none}#public-landing-mode>header a>div p{display:none}#public-hero h1{font-size:clamp(2.2rem,9vw,3rem)}#topbar{gap:.5rem}#topbar-submit-btn{padding:.6rem!important}}
 @media(max-width:380px){#public-header-auth button:last-child span:first-child{display:none}#public-landing-mode>header a{gap:.4rem}#public-landing-mode>header a img{width:32px;height:32px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Public information links are available on both desktop and mobile. */
+.dain-mobile-info-nav,.dain-footer-info-nav{display:flex;justify-content:center;flex-wrap:wrap;gap:24px;font-size:13px;color:var(--dain-muted,#64748b)}
+.dain-mobile-info-nav{padding:14px 8px 4px}.dain-footer-info-nav{padding:24px 20px 0}
+.dain-mobile-info-nav a:hover,.dain-footer-info-nav a:hover{text-decoration:underline;text-underline-offset:4px}
+@media(min-width:768px){.dain-mobile-info-nav{display:none}}

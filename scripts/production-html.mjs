@@ -1,6 +1,7 @@
 import {load} from 'cheerio';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
+import {publicLinks} from './public-pages.mjs';
 
 // Convert the trusted source's handlers at build time. No eval or runtime compilation.
 export async function productionHTML(source){
@@ -11,6 +12,17 @@ export async function productionHTML(source){
   return ` data-event-${event}="${id}"`;
  });
  const $=load(source);
+ // Public information pages remain reachable without an account or application JS.
+ $('#public-landing-mode header a').first().attr({'href':'/','aria-label':'DAIN by DUNITE — home'});
+ $('#public-landing-mode header nav').html(publicLinks).attr('aria-label','Main navigation');
+ $('#public-landing-mode header').append('<nav class="dain-mobile-info-nav" aria-label="Information pages">'+publicLinks+'</nav>');
+ $('#public-landing-mode footer').append('<nav class="dain-footer-info-nav" aria-label="Footer navigation">'+publicLinks+'<a href="https://dunite.app/contact">DUNITE Contact Us ↗</a></nav>');
+ const sidebarBrand=$('#close-sidebar').parent();
+ sidebarBrand.children('img').removeAttr('data-event-click').removeAttr('title');
+ sidebarBrand.children('img,div').wrapAll('<a href="/" class="flex items-center gap-3 min-w-0" aria-label="DAIN by DUNITE — home"></a>');
+ const authBrand=$('#auth-modal-title').parent().parent();
+ authBrand.wrap('<a href="/" aria-label="DAIN by DUNITE — home"></a>');
+
  $('#auth-form-demo,#tab-auth-demo').remove();
  $('#verify-email-token').attr('minlength','6').attr('inputmode','numeric').attr('autocomplete','one-time-code');
  $('p').filter((_,n)=>$(n).text().trim()==='Admin & Reach').attr('data-admin-heading','').attr('hidden','');
